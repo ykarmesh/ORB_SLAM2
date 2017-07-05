@@ -25,8 +25,8 @@
 #include<opencv2/core/core.hpp>
 #include<opencv2/features2d/features2d.hpp>
 
-#include"Viewer.h"
-#include"FrameDrawer.h"
+#include"Publisher.h"
+#include"FramePublisher.h"
 #include"Map.h"
 #include"LocalMapping.h"
 #include"LoopClosing.h"
@@ -35,7 +35,7 @@
 #include"KeyFrameDatabase.h"
 #include"ORBextractor.h"
 #include "Initializer.h"
-#include "MapDrawer.h"
+#include "MapPublisher.h"
 #include "System.h"
 
 #include <mutex>
@@ -43,8 +43,8 @@
 namespace ORB_SLAM2
 {
 
-class Viewer;
-class FrameDrawer;
+class Publisher;
+class FramePublisher;
 class Map;
 class LocalMapping;
 class LoopClosing;
@@ -54,7 +54,7 @@ class Tracking
 {  
 
 public:
-    Tracking(System* pSys, ORBVocabulary* pVoc, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Map* pMap,
+    Tracking(System* pSys, ORBVocabulary* pVoc, FramePublisher* pFramePublisher, MapPublisher* pMapPublisher, Map* pMap,
              KeyFrameDatabase* pKFDB, const string &strSettingPath, const int sensor);
 
     // Preprocess the input and call Track(). Extract features and performs stereo matching.
@@ -64,7 +64,7 @@ public:
 
     void SetLocalMapper(LocalMapping* pLocalMapper);
     void SetLoopClosing(LoopClosing* pLoopClosing);
-    void SetViewer(Viewer* pViewer);
+    void SetPublisher(Publisher* pPublisher);
 
     // Load new settings
     // The focal lenght should be similar or scale prediction will fail when projecting points
@@ -173,10 +173,10 @@ protected:
     // System
     System* mpSystem;
     
-    //Drawers
-    Viewer* mpViewer;
-    FrameDrawer* mpFrameDrawer;
-    MapDrawer* mpMapDrawer;
+    //Publishers
+    Publisher* mpPublisher;
+    FramePublisher* mpFramePublisher;
+    MapPublisher* mpMapPublisher;
 
     //Map
     Map* mpMap;

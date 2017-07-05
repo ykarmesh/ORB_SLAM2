@@ -19,11 +19,11 @@
 */
 
 
-#ifndef VIEWER_H
-#define VIEWER_H
+#ifndef PUBLISHER_H
+#define PUBLISHER_H
 
-#include "FrameDrawer.h"
-#include "MapDrawer.h"
+#include "FramePublisher.h"
+#include "MapPublisher.h"
 #include "Tracking.h"
 #include "System.h"
 
@@ -33,14 +33,14 @@ namespace ORB_SLAM2
 {
 
 class Tracking;
-class FrameDrawer;
-class MapDrawer;
+class FramePublisher;
+class MapPublisher;
 class System;
 
-class Viewer
+class Publisher
 {
 public:
-    Viewer(System* pSystem, FrameDrawer* pFrameDrawer, MapDrawer* pMapDrawer, Tracking *pTracking, const string &strSettingPath);
+    Publisher(System* pSystem, FramePublisher* pFramePublisher, MapPublisher* pMapPublisher, Tracking *pTracking);
 
     // Main thread function. Draw points, keyframes, the current camera pose and the last processed
     // frame. Drawing is refreshed according to the camera fps. We use Pangolin.
@@ -61,8 +61,8 @@ private:
     bool Stop();
 
     System* mpSystem;
-    FrameDrawer* mpFrameDrawer;
-    MapDrawer* mpMapDrawer;
+    FramePublisher* mpFramePublisher;
+    MapPublisher* mpMapPublisher;
     Tracking* mpTracker;
 
     // 1/fps in ms
@@ -86,6 +86,6 @@ private:
 }
 
 
-#endif // VIEWER_H
+#endif // PUBLISHER_H
 	
 

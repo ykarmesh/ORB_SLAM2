@@ -18,7 +18,7 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "Viewer.h"
+#include "Publisher.h"
 #include <pangolin/pangolin.h>
 
 #include <mutex>
@@ -26,11 +26,11 @@
 namespace ORB_SLAM2
 {
 
-Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer, Tracking *pTracking, const string &strSettingPath):
-    mpSystem(pSystem), mpFrameDrawer(pFrameDrawer),mpMapDrawer(pMapDrawer), mpTracker(pTracking),
+Publisher::Publisher(System* pSystem, FramePublisher *pFramePublisher, MapPublisher *pMapPublisher, Tracking *pTracking):
+    mpSystem(pSystem), mpFramePublisher(pFramePublisher),mpMapPublisher(pMapPublisher), mpTracker(pTracking),
     mbFinishRequested(false), mbFinished(true), mbStopped(true), mbStopRequested(false)
 {
-    cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
+    /*cv::FileStorage fSettings(strSettingPath, cv::FileStorage::READ);
 
     float fps = fSettings["Camera.fps"];
     if(fps<1)
@@ -45,18 +45,19 @@ Viewer::Viewer(System* pSystem, FrameDrawer *pFrameDrawer, MapDrawer *pMapDrawer
         mImageHeight = 480;
     }
 
-    mViewpointX = fSettings["Viewer.ViewpointX"];
-    mViewpointY = fSettings["Viewer.ViewpointY"];
-    mViewpointZ = fSettings["Viewer.ViewpointZ"];
-    mViewpointF = fSettings["Viewer.ViewpointF"];
+    mViewpointX = fSettings["Publisher.ViewpointX"];
+    mViewpointY = fSettings["Publisher.ViewpointY"];
+    mViewpointZ = fSettings["Publisher.ViewpointZ"];
+    mViewpointF = fSettings["Publisher.ViewpointF"];*/
 }
 
-void Viewer::Run()
+void Publisher::Run()
 {
     mbFinished = false;
     mbStopped = false;
+    /*
 
-    pangolin::CreateWindowAndBind("ORB-SLAM2: Map Viewer",1024,768);
+    pangolin::CreateWindowAndBind("ORB-SLAM2: Map Publisher",1024,768);
 
     // 3D Mouse handler requires depth testing to be enabled
     glEnable(GL_DEPTH_TEST);
@@ -91,12 +92,15 @@ void Viewer::Run()
 
     bool bFollow = true;
     bool bLocalizationMode = false;
-
+*/
+    mpSystem->DeactivateLocalizationMode();
     while(1)
     {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        mpMapPublisher->Refresh();
+        mpFramePublisher->Refresh();
+        /*glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        mpMapDrawer->GetCurrentOpenGLCameraMatrix(Twc);
+        mpMapPublisher->GetCurrentOpenGLCameraMatrix(Twc);
 
         if(menuFollowCamera && bFollow)
         {
@@ -126,15 +130,15 @@ void Viewer::Run()
 
         d_cam.Activate(s_cam);
         glClearColor(1.0f,1.0f,1.0f,1.0f);
-        mpMapDrawer->DrawCurrentCamera(Twc);
+        mpMapPublisher->DrawCurrentCamera(Twc);
         if(menuShowKeyFrames || menuShowGraph)
-            mpMapDrawer->DrawKeyFrames(menuShowKeyFrames,menuShowGraph);
+            mpMapPublisher->DrawKeyFrames(menuShowKeyFrames,menuShowGraph);
         if(menuShowPoints)
-            mpMapDrawer->DrawMapPoints();
+            mpMapPublisher->DrawMapPoints();
 
         pangolin::FinishFrame();
 
-        cv::Mat im = mpFrameDrawer->DrawFrame();
+        cv::Mat im = mpFramePublisher->DrawFrame();
         cv::imshow("ORB-SLAM2: Current Frame",im);
         cv::waitKey(mT);
 
@@ -151,7 +155,7 @@ void Viewer::Run()
             menuFollowCamera = true;
             mpSystem->Reset();
             menuReset = false;
-        }
+        }*/
 
         if(Stop())
         {
@@ -168,44 +172,44 @@ void Viewer::Run()
     SetFinish();
 }
 
-void Viewer::RequestFinish()
+void Publisher::RequestFinish()
 {
     unique_lock<mutex> lock(mMutexFinish);
     mbFinishRequested = true;
 }
 
-bool Viewer::CheckFinish()
+bool Publisher::CheckFinish()
 {
     unique_lock<mutex> lock(mMutexFinish);
     return mbFinishRequested;
 }
 
-void Viewer::SetFinish()
+void Publisher::SetFinish()
 {
     unique_lock<mutex> lock(mMutexFinish);
     mbFinished = true;
 }
 
-bool Viewer::isFinished()
+bool Publisher::isFinished()
 {
     unique_lock<mutex> lock(mMutexFinish);
     return mbFinished;
 }
 
-void Viewer::RequestStop()
+void Publisher::RequestStop()
 {
     unique_lock<mutex> lock(mMutexStop);
     if(!mbStopped)
         mbStopRequested = true;
 }
 
-bool Viewer::isStopped()
+bool Publisher::isStopped()
 {
     unique_lock<mutex> lock(mMutexStop);
     return mbStopped;
 }
 
-bool Viewer::Stop()
+bool Publisher::Stop()
 {
     unique_lock<mutex> lock(mMutexStop);
     unique_lock<mutex> lock2(mMutexFinish);
@@ -223,7 +227,7 @@ bool Viewer::Stop()
 
 }
 
-void Viewer::Release()
+void Publisher::Release()
 {
     unique_lock<mutex> lock(mMutexStop);
     mbStopped = false;

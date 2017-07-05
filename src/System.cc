@@ -30,7 +30,7 @@ namespace ORB_SLAM2
 {
 
 System::System(const string &strVocFile, const string &strSettingsFile, const eSensor sensor,
-               const bool bUseViewer):mSensor(sensor), mpViewer(static_cast<Viewer*>(NULL)), mbReset(false),mbActivateLocalizationMode(false),
+               const bool bUsePublisher):mSensor(sensor), mpPublisher(static_cast<Publisher*>(NULL)), mbReset(false),mbActivateLocalizationMode(false),
         mbDeactivateLocalizationMode(false)
 {
     // Output welcome message
@@ -77,13 +77,13 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     //Create the Map
     mpMap = new Map();
 
-    //Create Drawers. These are used by the Viewer
-    mpFrameDrawer = new FrameDrawer(mpMap);
-    mpMapDrawer = new MapDrawer(mpMap, strSettingsFile);
+    //Create Publishers. These are used by the Publisher
+    mpFramePublisher = new FramePublisher(mpMap);
+    mpMapPublisher = new MapPublisher(mpMap);
 
     //Initialize the Tracking thread
     //(it will live in the main thread of execution, the one that called this constructor)
-    mpTracker = new Tracking(this, mpVocabulary, mpFrameDrawer, mpMapDrawer,
+    mpTracker = new Tracking(this, mpVocabulary, mpFramePublisher, mpMapPublisher,
                              mpMap, mpKeyFrameDatabase, strSettingsFile, mSensor);
 
     //Initialize the Local Mapping thread and launch
@@ -94,14 +94,11 @@ System::System(const string &strVocFile, const string &strSettingsFile, const eS
     mpLoopCloser = new LoopClosing(mpMap, mpKeyFrameDatabase, mpVocabulary, mSensor!=MONOCULAR);
     mptLoopClosing = new thread(&ORB_SLAM2::LoopClosing::Run, mpLoopCloser);
 
-    //Initialize the Viewer thread and launch
-    if(bUseViewer)
-    {
-        mpViewer = new Viewer(this, mpFrameDrawer,mpMapDrawer,mpTracker,strSettingsFile);
-        mptViewer = new thread(&Viewer::Run, mpViewer);
-        mpTracker->SetViewer(mpViewer);
-    }
-
+    //Initialize the Publisher thread and launch
+    mpPublisher = new Publisher(this, mpFramePublisher,mpMapPublisher,mpTracker);
+    mptPublisher = new thread(&Publisher::Run, mpPublisher);
+    mpTracker->SetPublisher(mpPublisher);
+    
     //Set pointers between threads
     mpTracker->SetLocalMapper(mpLocalMapper);
     mpTracker->SetLoopClosing(mpLoopCloser);
@@ -302,10 +299,10 @@ void System::Shutdown()
 {
     mpLocalMapper->RequestFinish();
     mpLoopCloser->RequestFinish();
-    if(mpViewer)
+    if(mpPublisher)
     {
-        mpViewer->RequestFinish();
-        while(!mpViewer->isFinished())
+        mpPublisher->RequestFinish();
+        while(!mpPublisher->isFinished())
             usleep(5000);
     }
 
@@ -315,8 +312,8 @@ void System::Shutdown()
         usleep(5000);
     }
 
-    if(mpViewer)
-        pangolin::BindToContext("ORB-SLAM2: Map Viewer");
+    if(mpPublisher)
+        pangolin::BindToContext("ORB-SLAM2: Map Publisher");
 }
 
 void System::SaveTrajectoryTUM(const string &filename)
