@@ -131,8 +131,11 @@ cv::Mat FramePublisher::DrawFrame()
 				pt2.y=vCurrentKeys[i].pt.y+r;
 				if(!mvbOutliers[i])
 				{
-					cv::rectangle(im,pt1,pt2,cv::Scalar(0,255,0));
-					cv::circle(im,vCurrentKeys[i].pt,2,cv::Scalar(0,255,0),-1);
+					uint32_t colourlvl = 0xff<<((8-vMatchedMapPoints[i]->mnTrackScaleLevel)*3);
+					uint8_t r = (colourlvl & 0x000000ff);
+					uint8_t g = (colourlvl & 0x0000ff00)>>8;
+					uint8_t b = (colourlvl & 0x00ff0000)>>16;
+					cv::rectangle(im,pt1,pt2,cv::Scalar(r,g,b),CV_FILLED);
 					mnTracked++;
 				}
 			}
