@@ -264,6 +264,19 @@ cv::Mat System::TrackMonocular(const cv::Mat &im, const double &timestamp)
     return Tcw;
 }
 
+void System::SetOdometry(nav_msgs::OdometryPtr msg)
+{
+    unique_lock<mutex> lock(mMutexOdom);
+    mpOdom = msg;
+}
+
+nav_msgs::OdometryPtr System::GetOdometry()
+{
+    unique_lock<mutex> lock(mMutexOdom);
+    return mpOdom;
+}
+
+
 void System::ActivateLocalizationMode()
 {
     unique_lock<mutex> lock(mMutexMode);

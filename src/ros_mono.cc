@@ -28,17 +28,21 @@
 #include <cv_bridge/cv_bridge.h>
 
 #include<opencv2/core/core.hpp>
-
+#include <sensor_msgs/Image.h>
+#include <nav_msgs/Odometry.h>
+#include <std_msgs/String.h>
 #include"System.h"
 
 using namespace std;
 
-class ImageGrabber
+class ROSCallbacks
 {
 public:
-    ImageGrabber(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
+    ROSCallbacks(ORB_SLAM2::System* pSLAM):mpSLAM(pSLAM){}
 
-    void GrabImage(const sensor_msgs::ImageConstPtr& msg);
+    void ImageCb(const sensor_msgs::ImageConstPtr& msg);
+    void OdomCb(const nav_msgs::OdometryPtr& msg);
+    void StringCb(const std_msgs::StringPtr& msg);
 
     ORB_SLAM2::System* mpSLAM;
 };
@@ -58,10 +62,12 @@ int main(int argc, char **argv)
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::MONOCULAR,true);
 
-    ImageGrabber igb(&SLAM);
+    ROSCallbacks cb(&SLAM);
 
     ros::NodeHandle nodeHandler;
-    ros::Subscriber sub = nodeHandler.subscribe("/camera/rgb/image_raw", 1, &ImageGrabber::GrabImage,&igb);
+    ros::Subscriber img_sub = nodeHandler.subscribe("/camera/rgb/image_raw", 1, &ROSCallbacks::ImageCb,&cb);
+    ros::Subscriber odom_sub = nodeHandler.subscribe("/odom", 1, &ROSCallbacks::OdomCb,&cb);
+    ros::Subscriber reset_sub = nodeHandler.subscribe("/ORB_SLAM2/Reset", 1, &ROSCallbacks::StringCb,&cb);
 
     ros::spin();
 
@@ -76,7 +82,7 @@ int main(int argc, char **argv)
     return 0;
 }
 
-void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
+void ROSCallbacks::ImageCb(const sensor_msgs::ImageConstPtr& msg)
 {
     // Copy the ros image message to cv::Mat.
     cv_bridge::CvImageConstPtr cv_ptr;
@@ -94,3 +100,12 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
 }
 
 
+void ROSCallbacks::OdomCb(const nav_msgs::OdometryPtr& msg)
+{
+    mpSLAM->SetOdometry(msg);
+}
+
+void ROSCallbacks::StringCb(const std_msgs::StringPtr& msg)
+{
+    mpSLAM->Reset();
+}

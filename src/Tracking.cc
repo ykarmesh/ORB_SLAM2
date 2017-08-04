@@ -33,6 +33,9 @@
 #include"Optimizer.h"
 #include"PnPsolver.h"
 
+#include <tf/transform_datatypes.h>
+#include <geometry_msgs/Quaternion.h>
+
 #include<iostream>
 
 #include<mutex>
@@ -77,6 +80,8 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FramePublisher *pFramePubl
     DistCoef.copyTo(mDistCoef);
 
     mbf = fSettings["Camera.bf"];
+
+    mMinOdomDist = fSettings["MinOdomDist"];
 
     float fps = fSettings["Camera.fps"];
     if(fps==0)
@@ -145,7 +150,8 @@ Tracking::Tracking(System *pSys, ORBVocabulary* pVoc, FramePublisher *pFramePubl
         else
             mDepthMapFactor = 1.0f/mDepthMapFactor;
     }
-
+    //expPosePub = nh_.advertise<geometry_msgs::PoseStamped>("/next_pose",1);
+    srvPosePC_ = nh_.advertiseService("/ORB_SLAM2/posepointcloud", &Tracking::PosePointCloudService,this);
 }
 
 void Tracking::SetLocalMapper(LocalMapping *pLocalMapper)
@@ -580,7 +586,7 @@ void Tracking::MonocularInitialization()
             mpInitializer =  new Initializer(mCurrentFrame,1.0,200);
 
             fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
-
+            InitOdom = mpSystem->GetOdometry();
             return;
         }
     }
@@ -610,7 +616,18 @@ void Tracking::MonocularInitialization()
         cv::Mat Rcw; // Current Camera Rotation
         cv::Mat tcw; // Current Camera Translation
         vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
+        
+        //If the distance moved is too small, scaling errors can occur
+        if(InitOdom)
+        {
+            nav_msgs::OdometryPtr CurrOdom = mpSystem->GetOdometry();
 
+            float dist = sqrt((InitOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)*(InitOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)
+                            +  (InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)*(InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)
+                            +  (InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z)*(InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z));
+            if(dist < mMinOdomDist)
+                return;   
+        }
         if(mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
         {
             for(size_t i=0, iend=mvIniMatches.size(); i<iend;i++)
@@ -685,11 +702,23 @@ void Tracking::CreateInitialMapMonocular()
 
     Optimizer::GlobalBundleAdjustemnt(mpMap,20);
 
-    // Set median depth to 1
-    float medianDepth = pKFini->ComputeSceneMedianDepth(2);
-    float invMedianDepth = 1.0f/medianDepth;
+    float invMedianDepth;
 
-    if(medianDepth<0 || pKFcur->TrackedMapPoints(1)<100)
+    if(InitOdom)
+    {
+        nav_msgs::OdometryPtr CurrOdom = mpSystem->GetOdometry();
+
+        invMedianDepth = sqrt((InitOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)*(InitOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)
+                        +  (InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)*(InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)
+                        +  (InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z)*(InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z));
+    }
+    else
+    {
+        float medianDepth = pKFini->ComputeSceneMedianDepth(2);  // Set median depth to 1
+        invMedianDepth = 1.0f/medianDepth;
+    }
+
+    if(invMedianDepth<0 || pKFcur->TrackedMapPoints(1)<100)
     {
         cout << "Wrong initialization, reseting..." << endl;
         mpSystem->Reset();
@@ -1587,6 +1616,120 @@ void Tracking::InformOnlyTracking(const bool &flag)
     mbOnlyTracking = flag;
 }
 
+bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB_SLAM2::PosePointCloudResponse & resp)
+{
+    geometry_msgs::Quaternion q = req.pose.pose.orientation;
+    const float tx = 2 * q.x;
+    const float ty = 2 * q.y;
+    const float tz = 2 * q.z;
+    const float twx = tx * q.w;
+    const float twy = ty * q.w;
+    const float twz = tz * q.w;
+    const float txx = tx * q.x;
+    const float txy = ty * q.x;
+    const float txz = tz * q.x;
+    const float tyy = ty * q.y;
+    const float tyz = tz * q.y;
+    const float tzz = tz * q.z;
+    float pose_data[20] = { 1 - (tyy + tzz), txy - twz, txz + twy, req.pose.pose.position.x,
+                            txy + twz, 1 - (txx + tzz), tyz - twx, req.pose.pose.position.y,
+                            txz - twy, tyz + twx, 1 - (txx + tyy), req.pose.pose.position.z,
+                            0, 0, 0, 1};
+    cv::Mat Twp = cv::Mat(4, 4, CV_32F, pose_data);
+    cv::Mat Tpw = Twp.inv();
+    cv::Mat Rpw = Tpw.rowRange(0,3).colRange(0,3);
+    cv::Mat tpw = Tpw.rowRange(0,3).col(3);
+    cv::Mat Ow = -Rpw.t()*tpw;
 
+    float fx = mK.at<float>(0,0);
+    float fy = mK.at<float>(1,1);
+    float cx = mK.at<float>(0,2);
+    float cy = mK.at<float>(1,2);
+
+    resp.pointCloud.header.frame_id=MAP_FRAME_ID;
+    resp.pointCloud.header.stamp=ros::Time::now();
+    resp.pointCloud.header.seq=0;
+    resp.pointCloud.fields.resize(3);
+    resp.pointCloud.fields[0].name = "x";
+    resp.pointCloud.fields[0].offset = 0*sizeof(uint32_t);
+    resp.pointCloud.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
+    resp.pointCloud.fields[0].count = 1;
+    resp.pointCloud.fields[1].name = "y";
+    resp.pointCloud.fields[1].offset = 1*sizeof(uint32_t);
+    resp.pointCloud.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
+    resp.pointCloud.fields[1].count = 1;
+    resp.pointCloud.fields[2].name = "z";
+    resp.pointCloud.fields[2].offset = 2*sizeof(uint32_t);
+    resp.pointCloud.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
+    resp.pointCloud.fields[2].count = 1;
+    resp.pointCloud.point_step = 3*sizeof(uint32_t);
+    resp.pointCloud.is_dense = false;
+    resp.pointCloud.data.clear();
+    resp.pointCloud.height=1;
+    resp.pointCloud.width=mvpLocalMapPoints.size();
+    resp.pointCloud.row_step = resp.pointCloud.point_step * resp.pointCloud.width;
+    resp.pointCloud.data.resize(resp.pointCloud.row_step * resp.pointCloud.height);
+    unsigned char* dat = &(resp.pointCloud.data[0]);
+    int num_points = 0;
+    for(vector<MapPoint*>::iterator vit=mvpLocalMapPoints.begin(), vend=mvpLocalMapPoints.end(); vit!=vend; vit++)
+    {
+        MapPoint* pMP = *vit;
+        if(pMP->isBad())
+            continue;
+        
+        // 3D in absolute coordinates
+        cv::Mat P = pMP->GetWorldPos(); 
+
+        // 3D in camera coordinates
+        const cv::Mat Pc = Rpw*P+tpw;
+        const float &PcX = Pc.at<float>(0);
+        const float &PcY= Pc.at<float>(1);
+        const float &PcZ = Pc.at<float>(2);
+
+        // Check positive depth
+        if(PcZ<0.0f)
+            continue;
+        
+        // Project in image and check it is not outside
+        const float invz = 1.0f/PcZ;
+        const float u=fx*PcX*invz+cx;
+        const float v=fy*PcY*invz+cy;
+
+        if(u<0 || u>mImGray.cols)
+            continue;
+        if(v<0 || v>mImGray.rows)
+            continue;
+
+        // Check distance is in the scale invariance region of the MapPoint
+        const float maxDistance = pMP->GetMaxDistanceInvariance();
+        const float minDistance = pMP->GetMinDistanceInvariance();
+        const cv::Mat PO = P-Ow;
+        const float dist = cv::norm(PO);
+
+        if(dist<minDistance || dist>maxDistance)
+            continue;
+
+       // Check viewing angle
+        cv::Mat Pn = pMP->GetNormal();
+
+        const float viewCos = PO.dot(Pn)/dist;
+
+        if(viewCos<0.5)
+            continue;
+        /*
+        float x = P.at<float>(0);
+        float y = P.at<float>(2);
+        float z = -P.at<float>(1);*/
+        memcpy(dat, &(P.at<float>(0)),sizeof(float));
+        memcpy(dat+sizeof(float), &(P.at<float>(1)),sizeof(float));
+        memcpy(dat+2*sizeof(float), &(P.at<float>(2)),sizeof(float));
+        num_points++;
+        dat+=resp.pointCloud.point_step;
+    }
+    resp.pointCloud.width=num_points;
+    resp.pointCloud.row_step = resp.pointCloud.point_step * resp.pointCloud.width;
+    resp.pointCloud.data.resize(resp.pointCloud.row_step * resp.pointCloud.height);
+    return true;
+}
 
 } //namespace ORB_SLAM

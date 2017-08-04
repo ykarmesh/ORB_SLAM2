@@ -29,7 +29,7 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
-
+#include <sensor_msgs/PointCloud2.h>
 #include <boost/thread.hpp>
 
 
@@ -49,17 +49,17 @@ public:
 	void Refresh();
 
 	void SetMap(Map* pMap);
-	void ret_state();
-	void slam_info();
-
-
-
+	
 protected:
+	const char* MAP_FRAME_ID = "/world";
+    const char* CAMERA_FRAME_ID = "/camera_rgb_optical_frame";
+    
 	int mnTracked;
 
 	cv::Mat DrawFrame();
 
 	void PublishFrame();
+	void PublishSLAMStatus();
 
 	void DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText);
 
@@ -75,12 +75,9 @@ protected:
 	vector<int> mvIniMatches;
 
 	ros::NodeHandle mNH;
-	ros::Publisher mImagePub;
-	ros::Publisher tracking_pub;
-ros ::Publisher slam_pub;
-//ros::Publisher working_pub;
+	ros::Publisher mImagePub, mFramePointsPub, mSLAMStatusPub;
+	sensor_msgs::PointCloud2 mMapPointCloud;
 	
-
 	int mState;
 
 	bool mbUpdated;

@@ -21,7 +21,7 @@
 #include "MapPublisher.h"
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
-
+#include "Tracking.h"
 namespace ORB_SLAM2
 {
 
@@ -98,15 +98,16 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	
 	cout<<"Configure Publishers"<<endl;
 	mapPointCloud_pub = nh.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/Pointcloud",1);
-	referencePointCloud_pub = nh.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/ReferencePointcloud",1);
 	pose_pub = nh.advertise<geometry_msgs::PoseStamped>("ORB_SLAM2/Pose",1);
 	kfPath_pub = nh.advertise<visualization_msgs::Marker>("ORB_SLAM2/Path",1);
 	kfMST_pub = nh.advertise<visualization_msgs::Marker>("ORB_SLAM2/MST",1);
 	kfCovisibility_pub = nh.advertise<visualization_msgs::Marker>("ORB_SLAM2/Covisibility",1);
 }
 
-void MapPublisher::Refresh()
+void MapPublisher::Refresh(int state)
 {
+	if(state!=Tracking::OK)
+		return;
 	if(isCamUpdated())
 	{
 		PublishCurrentCamera(mCameraPose.clone());
@@ -141,45 +142,28 @@ void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const s
 		if(vpMPs[i]->isBad())
 			continue;
 		cv::Mat pos = vpMPs[i]->GetWorldPos();
+/*		float x = pos.at<float>(0);
+		float y = pos.at<float>(1);
+		float z = pos.at<float>(2);
+*/		/*new_pos = pos;
+		new_pos.at<float>(1) = -pos.at<float>(2);
+		new_pos.at<float>(2) = -pos.at<float>(1);*/
 		uint32_t colorlvl = 0xff<<((8-vpMPs[i]->mnTrackScaleLevel)*3);
 		uint32_t lvl = vpMPs[i]->mnTrackScaleLevel;
 		uint32_t KF = vpMPs[i]->mnFirstKFid;
 		memcpy(dat, &(pos.at<float>(0)),sizeof(float));
 		memcpy(dat+sizeof(float), &(pos.at<float>(1)),sizeof(float));
 		memcpy(dat+2*sizeof(float), &(pos.at<float>(2)),sizeof(float));
-		memcpy(dat+3*sizeof(uint32_t),&colorlvl,sizeof(uint32_t));
+		/*memcpy(dat, &x,sizeof(float));
+		memcpy(dat+sizeof(float), &y,sizeof(float));
+		memcpy(dat+2*sizeof(float), &z,sizeof(float));
+		*/memcpy(dat+3*sizeof(uint32_t),&colorlvl,sizeof(uint32_t));
 		memcpy(dat+4*sizeof(uint32_t),&lvl,sizeof(uint32_t));
 		memcpy(dat+5*sizeof(uint32_t),&KF,sizeof(uint32_t));
 		dat+=mMapPointCloud.point_step;
 	}
 	
 	mapPointCloud_pub.publish(mMapPointCloud);
-
-	mMapPointCloud.data.clear();
-	mMapPointCloud.width=spRefMPs.size();
-	mMapPointCloud.height=1;
-	mMapPointCloud.row_step = mMapPointCloud.point_step * mMapPointCloud.width;
-	mMapPointCloud.data.resize(mMapPointCloud.row_step * mMapPointCloud.height);
-	dat = &(mMapPointCloud.data[0]);
-
-	for(set<MapPoint*>::iterator sit=spRefMPs.begin(), send=spRefMPs.end(); sit!=send; sit++)
-	{
-		if((*sit)->isBad())
-			continue;
-		cv::Mat pos = (*sit)->GetWorldPos();
-		uint32_t colorlvl = 0xff<<((8-(*sit)->mnTrackScaleLevel)*3);
-		uint32_t lvl = (*sit)->mnTrackScaleLevel;
-		uint32_t KF = (*sit)->mnFirstKFid;
-		memcpy(dat, &(pos.at<float>(0)),sizeof(float));
-		memcpy(dat+sizeof(float), &(pos.at<float>(1)),sizeof(float));
-		memcpy(dat+2*sizeof(float), &(pos.at<float>(2)),sizeof(float));
-		memcpy(dat+3*sizeof(uint32_t),&colorlvl,sizeof(uint32_t));
-		memcpy(dat+4*sizeof(uint32_t),&lvl,sizeof(uint32_t));
-		memcpy(dat+5*sizeof(uint32_t),&KF,sizeof(uint32_t));
-		dat+=mMapPointCloud.point_step;
-	}
-
-	referencePointCloud_pub.publish(mMapPointCloud);
 }
 
 void MapPublisher::PublishKeyFrames(const std::vector<KeyFrame*> &vpKFs)

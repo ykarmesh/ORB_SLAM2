@@ -42,13 +42,13 @@ public:
 
 	Map* mpMap;
 
-	void Refresh();
+	void Refresh(int state);
 	void SetCurrentCameraPose(const cv::Mat &Tcw);
 	
 private:
 
-    const char* MAP_FRAME_ID = "/world";
-    const char* CAMERA_FRAME_ID = "/camera_rgb_optical_frame";
+    const char* MAP_FRAME_ID = "world";
+    const char* CAMERA_FRAME_ID = "camera_rgb_optical_frame";
     const char* POINTS_NAMESPACE = "MapPoints";
     const char* KEYFRAMES_NAMESPACE = "KeyFrames";
     const char* GRAPH_NAMESPACE = "Graph";
@@ -63,7 +63,7 @@ private:
 
 	ros::NodeHandle nh;
 	ros::Publisher publisher;
-	ros::Publisher mapPointCloud_pub, referencePointCloud_pub, pose_pub, kfPath_pub, kfMST_pub, kfCovisibility_pub;
+	ros::Publisher mapPointCloud_pub, pose_pub, kfPath_pub, kfMST_pub, kfCovisibility_pub;
 
 	visualization_msgs::Marker mKeyFrames, mCovisibilityGraph, mMST;
 	sensor_msgs::PointCloud2 mMapPointCloud;
@@ -73,7 +73,7 @@ private:
 
 	cv::Mat mCameraPose;
 	bool mbCameraUpdated;
-
+	int mState;
 	boost::mutex mMutexCamera;
 };
 

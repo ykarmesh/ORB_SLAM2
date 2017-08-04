@@ -27,11 +27,11 @@
 #include<boost/thread.hpp>
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
-#include "std_msgs/Int16.h"
+#include <sensor_msgs/Image.h>
+#include <std_msgs/Bool.h>
 #include <MapPoint.h>
 #include <iostream>
-#include <std_msgs/Empty.h>
-#include <std_msgs/Int8.h>
+
 
 
 namespace ORB_SLAM2
@@ -46,8 +46,26 @@ FramePublisher::FramePublisher(Map *pMap)
 	mbUpdated = true;
 	SetMap(pMap);
 	mImagePub = mNH.advertise<sensor_msgs::Image>("ORB_SLAM2/Frame",10,true);
-
-	PublishFrame();
+	mFramePointsPub = mNH.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/FramePoints",10,true);
+	mSLAMStatusPub = mNH.advertise<std_msgs::Bool>("ORB_SLAM2/Status",10,true);
+	
+	mMapPointCloud.header.frame_id=MAP_FRAME_ID;
+	mMapPointCloud.header.seq=0;
+	mMapPointCloud.fields.resize(3);
+	mMapPointCloud.fields[0].name = "x";
+	mMapPointCloud.fields[0].offset = 0*sizeof(uint32_t);
+	mMapPointCloud.fields[0].datatype = sensor_msgs::PointField::FLOAT32;
+	mMapPointCloud.fields[0].count = 1;
+	mMapPointCloud.fields[1].name = "y";
+	mMapPointCloud.fields[1].offset = 1*sizeof(uint32_t);
+	mMapPointCloud.fields[1].datatype = sensor_msgs::PointField::FLOAT32;
+	mMapPointCloud.fields[1].count = 1;
+	mMapPointCloud.fields[2].name = "z";
+	mMapPointCloud.fields[2].offset = 2*sizeof(uint32_t);
+	mMapPointCloud.fields[2].datatype = sensor_msgs::PointField::FLOAT32;
+	mMapPointCloud.fields[2].count = 1;
+	mMapPointCloud.point_step = 3*sizeof(uint32_t);
+	mMapPointCloud.is_dense = false;
 }  
 
 void FramePublisher::SetMap(Map *pMap)
@@ -60,8 +78,8 @@ void FramePublisher::Refresh()
 	if(mbUpdated)
 	{
 		PublishFrame();
+		PublishSLAMStatus();
 		mbUpdated = false;
-		//FramePublisher::slam_info();
 	}
 }
 
@@ -75,6 +93,10 @@ cv::Mat FramePublisher::DrawFrame()
 
 	int state; // Tracking state
 
+		mMapPointCloud.header.stamp=ros::Time::now();
+		mMapPointCloud.header.seq++;
+		mMapPointCloud.data.clear();
+		mMapPointCloud.height=1;
 	//Copy variable to be used within scoped mutex
 	{
 		boost::mutex::scoped_lock lock(mMutex);
@@ -120,8 +142,15 @@ cv::Mat FramePublisher::DrawFrame()
 	{
 		mnTracked=0;
 		const float r = 5;
+		mMapPointCloud.width=vMatchedMapPoints.size();
+		mMapPointCloud.row_step = mMapPointCloud.point_step * mMapPointCloud.width;
+		mMapPointCloud.data.resize(mMapPointCloud.row_step * mMapPointCloud.height);
+		unsigned char* dat = &(mMapPointCloud.data[0]);	
+				
 		for(unsigned int i=0;i<vMatchedMapPoints.size();i++)
 		{
+			vMatchedMapPoints[i];
+			mvbOutliers[i];
 			if(vMatchedMapPoints[i] || mvbOutliers[i])
 			{
 				cv::Point2f pt1,pt2;
@@ -137,15 +166,29 @@ cv::Mat FramePublisher::DrawFrame()
 					uint8_t b = (colourlvl & 0x00ff0000)>>16;
 					cv::rectangle(im,pt1,pt2,cv::Scalar(r,g,b),CV_FILLED);
 					mnTracked++;
+
+					cv::Mat pos = vMatchedMapPoints[i]->GetWorldPos();
+					/*float x = pos.at<float>(0);
+					float y = pos.at<float>(1);
+					float z = pos.at<float>(2);
+					*/memcpy(dat, &(pos.at<float>(0)),sizeof(float));
+					memcpy(dat+sizeof(float), &(pos.at<float>(1)),sizeof(float));
+					memcpy(dat+2*sizeof(float), &(pos.at<float>(2)),sizeof(float));
+					dat+=mMapPointCloud.point_step;
 				}
 			}
 		}
-
+		/*mMapPointCloud.width=mnTracked;
+				mMapPointCloud.row_step = mMapPointCloud.point_step * mMapPointCloud.width;
+				mMapPointCloud.data.resize(mMapPointCloud.row_step * mMapPointCloud.height);
+				
+*/
+		mFramePointsPub.publish(mMapPointCloud);
 	}
 
 	cv::Mat imWithInfo;
 	DrawTextInfo(im,state, imWithInfo);
-
+	
 	return imWithInfo;
 }
 
@@ -163,12 +206,18 @@ void FramePublisher::PublishFrame()
 	ros::spinOnce();
 }
 
+void FramePublisher::PublishSLAMStatus()
+{
+	std_msgs::Bool status;
+	status.data = (mState==Tracking::OK);
+	mSLAMStatusPub.publish(status);
+}
+
 void FramePublisher::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 {   
 	stringstream s;
-	slam_pub=mNH.advertise<std_msgs::Int8>("ORB_SLAM2/Failure",10);
 	if(nState==Tracking::NO_IMAGES_YET)
-		s << "WAITING FOR IMAGES. (Topic: /camera/image_raw)";
+		s << "WAITING FOR IMAGES. (Topic: /camera/rgb/image_raw)";
 	else if(nState==Tracking::NOT_INITIALIZED)
 		s << " TRYING TO INITIALIZE ";
 	else if(nState==Tracking::OK)
@@ -177,20 +226,11 @@ void FramePublisher::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 		int nKFs = mpMap->KeyFramesInMap();
 		int nMPs = mpMap->MapPointsInMap();
 		s << " - KFs: " << nKFs << " , MPs: " << nMPs << " , Tracked: " << mnTracked;
-	  
-		FramePublisher::ret_state(); //Publish tracked features
-		 //Publish map points
-		
-
 	}
 	else if(nState==Tracking::LOST)
-	{
 		s << " TRACK LOST. TRYING TO RELOCALIZE ";
-	}
 	else if(nState==Tracking::SYSTEM_NOT_READY)
-	{
 		s << " LOADING ORB VOCABULARY. PLEASE WAIT...";
-	}
 
 	int baseline=0;
 	cv::Size textSize = cv::getTextSize(s.str(),cv::FONT_HERSHEY_PLAIN,1,1,&baseline);
@@ -199,7 +239,6 @@ void FramePublisher::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 	im.copyTo(imText.rowRange(0,im.rows).colRange(0,im.cols));
 	imText.rowRange(im.rows,imText.rows) = cv::Mat::zeros(textSize.height+10,im.cols,im.type());
 	cv::putText(imText,s.str(),cv::Point(5,imText.rows-5),cv::FONT_HERSHEY_PLAIN,1,cv::Scalar(255,255,255),1,8);
-
 }
 
 void FramePublisher::Update(Tracking *pTracker)
@@ -217,37 +256,7 @@ void FramePublisher::Update(Tracking *pTracker)
 	}
 	
 	mState=static_cast<int>(pTracker->mLastProcessedState);
-	FramePublisher::slam_info();
 	mbUpdated=true;
 }
-
-void FramePublisher::ret_state()
-{   tracking_pub=mNH.advertise<std_msgs::Int16>("ORB_SLAM2/Tracked",10);
-	tracking_pub.publish(FramePublisher::mnTracked);
-
-
-}
-void FramePublisher::slam_info()
-{
-	if (mState==Tracking::LOST)
-		{
-			slam_pub.publish(0);
-			
-		}
-
-	else if(mState==Tracking::OK)
-	{  
-		slam_pub.publish(1);
-
-	}
-
-
-
-}
-	
-
-	
-	
-
 
 } //namespace ORB_SLAM2

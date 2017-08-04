@@ -13,7 +13,9 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   tf
   visualization_msgs
+  nav_msgs
   cv_bridge
+  message_generation
 )
 
 find_package(OpenCV REQUIRED)
@@ -21,8 +23,16 @@ find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Pangolin REQUIRED)
 find_package(Boost REQUIRED)
 
+add_service_files(DIRECTORY srv
+  FILES
+  PosePointCloud.srv
+)
 
-catkin_package(CATKIN_DEPENDS roscpp std_msgs sensor_msgs tf visualization_msgs cv_bridge)
+#And now generate the messages
+generate_messages(DEPENDENCIES std_msgs sensor_msgs)
+
+
+catkin_package(CATKIN_DEPENDS roscpp std_msgs sensor_msgs tf visualization_msgs cv_bridge message_runtime)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wall  -O3 -march=native ")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall   -O3 -march=native -g")
@@ -44,6 +54,8 @@ else()
 endif()
 
 LIST(APPEND CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake_modules)
+
+
 
 
 include_directories(
@@ -91,9 +103,9 @@ ${catkin_LIBRARIES}
 add_executable(orb_mono src/ros_mono.cc)
 target_link_libraries(orb_mono ${PROJECT_NAME} ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(orb_stereo src/ros_stereo.cc)
-target_link_libraries(orb_stereo ${PROJECT_NAME} ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
+# add_executable(orb_stereo src/ros_stereo.cc)
+# target_link_libraries(orb_stereo ${PROJECT_NAME} ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
 
-add_executable(orb_rgbd src/ros_rgbd.cc)
-target_link_libraries(orb_rgbd ${PROJECT_NAME} ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
+# add_executable(orb_rgbd src/ros_rgbd.cc)
+# target_link_libraries(orb_rgbd ${PROJECT_NAME} ${catkin_LIBRARIES} ${EIGEN3_LIBRARIES} ${Boost_LIBRARIES} ${OpenCV_LIBS})
 

@@ -96,7 +96,7 @@ void Publisher::Run()
     mpSystem->DeactivateLocalizationMode();
     while(1)
     {
-        mpMapPublisher->Refresh();
+        mpMapPublisher->Refresh(static_cast<int>(mpTracker->mLastProcessedState));
         mpFramePublisher->Refresh();
         /*glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

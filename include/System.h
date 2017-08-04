@@ -36,6 +36,8 @@
 #include "ORBVocabulary.h"
 #include "Publisher.h"
 
+#include <nav_msgs/Odometry.h>
+
 namespace ORB_SLAM2
 {
 
@@ -122,7 +124,15 @@ public:
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 
+    //Odometry
+    void SetOdometry(nav_msgs::OdometryPtr msg);
+    nav_msgs::OdometryPtr GetOdometry();
+
 private:
+
+    //Robot Odometry
+    std::mutex mMutexOdom;
+    nav_msgs::OdometryPtr mpOdom;
 
     // Input sensor
     eSensor mSensor;

@@ -37,7 +37,9 @@
 #include "Initializer.h"
 #include "MapPublisher.h"
 #include "System.h"
-
+#include <ORB_SLAM2/PosePointCloud.h>
+#include <nav_msgs/Odometry.h>
+#include <ros/ros.h>
 #include <mutex>
 
 namespace ORB_SLAM2
@@ -114,9 +116,13 @@ public:
     bool mbOnlyTracking;
 
     void Reset();
+    bool PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB_SLAM2::PosePointCloudResponse & resp); 
 
 protected:
-
+    const char* MAP_FRAME_ID = "/world";
+    const char* CAMERA_FRAME_ID = "/camera_rgb_optical_frame";
+    ros::NodeHandle nh_;
+    ros::ServiceServer srvPosePC_;
     // Main tracking function. It is independent of the input sensor.
     void Track();
 
@@ -186,6 +192,9 @@ protected:
     cv::Mat mDistCoef;
     float mbf;
 
+    //Minimum Odometry Distance
+    float mMinOdomDist;
+
     //New KeyFrame rules (according to fps)
     int mMinFrames;
     int mMaxFrames;
@@ -214,6 +223,9 @@ protected:
     bool mbRGB;
 
     list<MapPoint*> mlpTemporalPoints;
+
+    //First kf Odometry
+    nav_msgs::OdometryPtr InitOdom;
 };
 
 } //namespace ORB_SLAM
