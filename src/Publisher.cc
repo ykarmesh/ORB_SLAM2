@@ -19,7 +19,7 @@
 */
 
 #include "Publisher.h"
-#include <pangolin/pangolin.h>
+//#include <pangolin/pangolin.h>
 
 #include <mutex>
 

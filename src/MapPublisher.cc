@@ -38,7 +38,7 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	mKeyFrames.action=visualization_msgs::Marker::ADD;
 	mKeyFrames.color.b=1.0f;
 	mKeyFrames.color.a = 1.0;
-	
+
 	cout<<"Configure Covisibility Graph"<<endl;
 	mCovisibilityGraph.header.frame_id = MAP_FRAME_ID;
 	mCovisibilityGraph.ns = GRAPH_NAMESPACE;
@@ -64,8 +64,8 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	mMST.color.a = 1.0;
 
 	cout<<"Configure MapPoint"<<endl;
-	
-	mMapPointCloud.header.frame_id=MAP_FRAME_ID;
+
+	mMapPointCloud.header.frame_id= MAP_FRAME_ID;
 	mMapPointCloud.header.stamp=ros::Time::now();
 	mMapPointCloud.header.seq=0;
 	mMapPointCloud.fields.resize(6);
@@ -95,7 +95,7 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	mMapPointCloud.fields[5].count = 1;
 	mMapPointCloud.point_step = 6*sizeof(uint32_t);
 	mMapPointCloud.is_dense = false;
-	
+
 	cout<<"Configure Publishers"<<endl;
 	mapPointCloud_pub = nh.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/Pointcloud",1);
 	pose_pub = nh.advertise<geometry_msgs::PoseStamped>("ORB_SLAM2/Pose",1);
@@ -113,20 +113,23 @@ void MapPublisher::Refresh(int state)
 		PublishCurrentCamera(mCameraPose.clone());
 		ResetCamFlag();
 	}
-	
+
 	{
 		unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
 		vector<KeyFrame*> vKeyFrames = mpMap->GetAllKeyFrames();
 		vector<MapPoint*> vMapPoints = mpMap->GetAllMapPoints();
 		vector<MapPoint*> vRefMapPoints = mpMap->GetReferenceMapPoints();
-		
-		PublishMapPoints(vMapPoints, vRefMapPoints); 
+
+		PublishMapPoints(vMapPoints, vRefMapPoints, mCameraPose.clone());
 		PublishKeyFrames(vKeyFrames);
-	}	
+	}
 }
 
-void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const std::vector<MapPoint*> &vpRefMPs)
-{   
+void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const std::vector<MapPoint*> &vpRefMPs, const cv::Mat &Tcw)
+{
+	cv::Mat TWC = Tcw.inv();
+	cv::Mat tWC= TWC.rowRange(0,3).col(3);
+
 	set<MapPoint*> spRefMPs(vpRefMPs.begin(), vpRefMPs.end());
 	mMapPointCloud.header.seq++;
 	mMapPointCloud.header.stamp = ros::Time::now();
@@ -142,18 +145,18 @@ void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const s
 		if(vpMPs[i]->isBad())
 			continue;
 		cv::Mat pos = vpMPs[i]->GetWorldPos();
-/*		float x = pos.at<float>(0);
-		float y = pos.at<float>(1);
-		float z = pos.at<float>(2);
-*/		/*new_pos = pos;
+		float x = pos.at<float>(0);// - tWC.at<float>(0);
+		float y = pos.at<float>(1);// - tWC.at<float>(1);
+		float z = pos.at<float>(2);// - tWC.at<float>(2);
+		/*new_pos = pos;
 		new_pos.at<float>(1) = -pos.at<float>(2);
 		new_pos.at<float>(2) = -pos.at<float>(1);*/
 		uint32_t colorlvl = 0xff<<((8-vpMPs[i]->mnTrackScaleLevel)*3);
 		uint32_t lvl = vpMPs[i]->mnTrackScaleLevel;
 		uint32_t KF = vpMPs[i]->mnFirstKFid;
-		memcpy(dat, &(pos.at<float>(0)),sizeof(float));
-		memcpy(dat+sizeof(float), &(pos.at<float>(1)),sizeof(float));
-		memcpy(dat+2*sizeof(float), &(pos.at<float>(2)),sizeof(float));
+		memcpy(dat, &x,sizeof(float));
+		memcpy(dat+sizeof(float), &y,sizeof(float));
+		memcpy(dat+2*sizeof(float), &z,sizeof(float));
 		/*memcpy(dat, &x,sizeof(float));
 		memcpy(dat+sizeof(float), &y,sizeof(float));
 		memcpy(dat+2*sizeof(float), &z,sizeof(float));
@@ -162,7 +165,7 @@ void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const s
 		memcpy(dat+5*sizeof(uint32_t),&KF,sizeof(uint32_t));
 		dat+=mMapPointCloud.point_step;
 	}
-	
+
 	mapPointCloud_pub.publish(mMapPointCloud);
 }
 
@@ -175,14 +178,14 @@ void MapPublisher::PublishKeyFrames(const std::vector<KeyFrame*> &vpKFs)
 	for(size_t i=0, iend=vpKFs.size() ;i<iend; i++)
 	{
 		cv::Mat kfOriginMat = vpKFs[i]->GetCameraCenter();
-		
+
 		geometry_msgs::Point kfOrigin;
 		kfOrigin.x=kfOriginMat.at<float>(0);
 		kfOrigin.y=kfOriginMat.at<float>(1);
 		kfOrigin.z=kfOriginMat.at<float>(2);
-		
+
 		mKeyFrames.points.push_back(kfOrigin);
-		
+
 		// Covisibility Graph
 		vector<KeyFrame*> vCovKFs = vpKFs[i]->GetCovisiblesByWeight(100);
 		if(!vCovKFs.empty())
@@ -240,7 +243,7 @@ void MapPublisher::PublishKeyFrames(const std::vector<KeyFrame*> &vpKFs)
 void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 {
 	cv::Mat TWC = Tcw.inv();
-	cv::Mat RWC= TWC.rowRange(0,3).colRange(0,3);  
+	cv::Mat RWC= TWC.rowRange(0,3).colRange(0,3);
 	cv::Mat tWC= TWC.rowRange(0,3).col(3);
 
 	tf::Matrix3x3 M(RWC.at<float>(0,0),RWC.at<float>(0,1),RWC.at<float>(0,2),
@@ -250,17 +253,29 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 	tf::Quaternion q;
 	M.getRotation(q);
 
+	tf::StampedTransform transformco;
+	try
+	{
+    listener.lookupTransform("/camera_rgb_optical_frame", "/odom", ros::Time(0), transformco);
+	}
+  catch (tf::TransformException &ex)
+	{
+  	ROS_ERROR("%s",ex.what());
+		ros::Duration(1.0).sleep();
+		return;
+  }
+
 	static tf::TransformBroadcaster br;
-	tf::Transform transform = tf::Transform(M, V);
-	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), MAP_FRAME_ID, CAMERA_FRAME_ID));
+	tf::Transform transformwc = tf::Transform(M, V);
+	br.sendTransform(tf::StampedTransform(transformwc * transformco, ros::Time::now(), MAP_FRAME_ID, ODOM_FRAME_ID));
 	geometry_msgs::PoseStamped _pose;
-	_pose.pose.position.x = transform.getOrigin().x();
-	_pose.pose.position.y = transform.getOrigin().y();
-	_pose.pose.position.z = transform.getOrigin().z();
-	_pose.pose.orientation.x = transform.getRotation().x();
-	_pose.pose.orientation.y = transform.getRotation().y();
-	_pose.pose.orientation.z = transform.getRotation().z();
-	_pose.pose.orientation.w = transform.getRotation().w();
+	_pose.pose.position.x = transformwc.getOrigin().x();
+	_pose.pose.position.y = transformwc.getOrigin().y();
+	_pose.pose.position.z = transformwc.getOrigin().z();
+	_pose.pose.orientation.x = transformwc.getRotation().x();
+	_pose.pose.orientation.y = transformwc.getRotation().y();
+	_pose.pose.orientation.z = transformwc.getRotation().z();
+	_pose.pose.orientation.w = transformwc.getRotation().w();
 
 	_pose.header.stamp = ros::Time::now();
 	_pose.header.frame_id = MAP_FRAME_ID;

@@ -20,7 +20,6 @@ find_package(catkin REQUIRED COMPONENTS
 
 find_package(OpenCV REQUIRED)
 find_package(Eigen3 3.1.0 REQUIRED)
-find_package(Pangolin REQUIRED)
 find_package(Boost REQUIRED)
 
 add_service_files(DIRECTORY srv

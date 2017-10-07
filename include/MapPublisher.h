@@ -26,7 +26,8 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <visualization_msgs/Marker.h>
 #include <boost/thread.hpp>
-#include <pangolin/pangolin.h>
+#include <tf/transform_listener.h>
+//#include <pangolin/pangolin.h>
 
 #include "Map.h"
 #include "MapPoint.h"
@@ -44,17 +45,17 @@ public:
 
 	void Refresh(int state);
 	void SetCurrentCameraPose(const cv::Mat &Tcw);
-	
+
 private:
 
     const char* MAP_FRAME_ID = "world";
-    const char* CAMERA_FRAME_ID = "camera_rgb_optical_frame";
+    const char* ODOM_FRAME_ID = "odom";
     const char* POINTS_NAMESPACE = "MapPoints";
     const char* KEYFRAMES_NAMESPACE = "KeyFrames";
     const char* GRAPH_NAMESPACE = "Graph";
     const char* CAMERA_NAMESPACE = "Camera";
 
-	void PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const std::vector<MapPoint*> &vpRefMPs);
+	void PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const std::vector<MapPoint*> &vpRefMPs, const cv::Mat &Tcw);
 	void PublishKeyFrames(const std::vector<KeyFrame*> &vpKFs);
 	void PublishCurrentCamera(const cv::Mat &Tcw);
 
@@ -67,14 +68,16 @@ private:
 
 	visualization_msgs::Marker mKeyFrames, mCovisibilityGraph, mMST;
 	sensor_msgs::PointCloud2 mMapPointCloud;
-    
-    float fCameraSize;
+
+    	float fCameraSize;
 	float fPointSize;
 
 	cv::Mat mCameraPose;
 	bool mbCameraUpdated;
 	int mState;
 	boost::mutex mMutexCamera;
+
+	tf::TransformListener listener;
 };
 
 } //namespace ORB_SLAM2
