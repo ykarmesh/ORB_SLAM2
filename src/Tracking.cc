@@ -616,7 +616,7 @@ void Tracking::MonocularInitialization()
         cv::Mat Rcw; // Current Camera Rotation
         cv::Mat tcw; // Current Camera Translation
         vector<bool> vbTriangulated; // Triangulated Correspondences (mvIniMatches)
-        
+
         //If the distance moved is too small, scaling errors can occur
         if(InitOdom)
         {
@@ -626,7 +626,7 @@ void Tracking::MonocularInitialization()
                             +  (InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)*(InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)
                             +  (InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z)*(InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z));
             if(dist < mMinOdomDist)
-                return;   
+                return;
         }
         if(mpInitializer->Initialize(mCurrentFrame, mvIniMatches, Rcw, tcw, mvIniP3D, vbTriangulated))
         {
@@ -945,7 +945,7 @@ bool Tracking::TrackWithMotionModel()
             else if(mCurrentFrame.mvpMapPoints[i]->Observations()>0)
                 nmatchesMap++;
         }
-    }    
+    }
 
     if(mbOnlyTracking)
     {
@@ -1676,9 +1676,9 @@ bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB
         MapPoint* pMP = *vit;
         if(pMP->isBad())
             continue;
-        
+
         // 3D in absolute coordinates
-        cv::Mat P = pMP->GetWorldPos(); 
+        cv::Mat P = pMP->GetWorldPos();
 
         // 3D in camera coordinates
         const cv::Mat Pc = Rpw*P+tpw;
@@ -1689,7 +1689,7 @@ bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB
         // Check positive depth
         if(PcZ<0.0f)
             continue;
-        
+
         // Project in image and check it is not outside
         const float invz = 1.0f/PcZ;
         const float u=fx*PcX*invz+cx;
