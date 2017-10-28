@@ -437,6 +437,39 @@ void Tracking::Track()
             else
                 mVelocity = cv::Mat();
 
+            if(ros::Time::now() - lastTime > ros::Duration(1.0))
+            {
+              nav_msgs::OdometryPtr CurrOdom = mpSystem->GetOdometry();
+              double vo_dist, wo_dist;
+              wo_dist = sqrt((LastOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)*(LastOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)
+                            +  (LastOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)*(LastOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)
+                            +  (LastOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z)*(LastOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z));
+              if(wo_dist > 0.1)
+              {
+                wo.at<float>(i%20,0) = wo_dist;
+                cv::Mat Twc1 = mCurrentFrame.mTcw.inv();
+                cv::Mat Twc2 = lastFrame.inv();
+                vo_dist = sqrt(pow((Twc1.at<float>(0,3)-Twc2.at<float>(0,3)),2)+pow((Twc1.at<float>(1,3)-Twc2.at<float>(1,3)),2)
+                               +pow((Twc1.at<float>(2,3)-Twc2.at<float>(2,3)),2));
+                vo.at<float>(i%20,0) = vo_dist;
+                cv::Mat a = wo.t()*vo;
+                cv::Mat b = vo.t()*vo;
+                s = a.at<float>(0,0)/b.at<float>(0,0);
+                cout << i << " ORB_SLAM: " << vo_dist << " Wheel odom " << wo_dist << " actual scaling required " << s <<endl;
+                i++;
+
+              }
+              LastOdom = CurrOdom;
+              lastTime = ros::Time::now();
+              lastFrame = mCurrentFrame.mTcw;
+            }
+            if((!mLastFrame.mTcw.empty())&&(i/2 == 1))
+            {
+              mVelocity.rowRange(0,3).col(3) = mVelocity.rowRange(0,3).col(3) * s;
+              cv::Mat a = mVelocity*mLastFrame.mTcw;
+              mCurrentFrame.mTcw.rowRange(0,3).colRange(0,3).copyTo(a.rowRange(0,3).colRange(0,3));
+              mCurrentFrame.SetPose(a);
+            }
             mpMapPublisher->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
             // Clean VO matches
@@ -568,7 +601,6 @@ void Tracking::StereoInitialization()
 
 void Tracking::MonocularInitialization()
 {
-
     if(!mpInitializer)
     {
         // Set Reference Frame
@@ -599,6 +631,8 @@ void Tracking::MonocularInitialization()
             mpInitializer = static_cast<Initializer*>(NULL);
             fill(mvIniMatches.begin(),mvIniMatches.end(),-1);
             return;
+
+
         }
 
         // Find correspondences
@@ -639,12 +673,22 @@ void Tracking::MonocularInitialization()
                 }
             }
 
-            // Set Frame Poses
+            /*cv::Mat Tw2i = cv::Mat::eye(4,4,CV_32F);
+            Tw2i.at<float>(0,3) = InitOdom->pose.pose.position.x;
+            Tw2i.at<float>(1,3) = InitOdom->pose.pose.position.y;
+            Tw2i.at<float>(2,3) = InitOdom->pose.pose.position.z;
+            geometry_msgs::Quaternion q = InitOdom->pose.pose.orientation;
+            Eigen::Quaternion<double> quat(q.w,q.x,q.y,q.z);
+            Tw2i.rowRange(0,3).colRange(0,3) = Converter::toCvMat(quat.matrix());
+            cv::Mat Tww2 = mpSystem->gettransform();
+            (Tww2 * Tw2i).inv();*/
+            // Set Frame Pose
             mInitialFrame.SetPose(cv::Mat::eye(4,4,CV_32F));
             cv::Mat Tcw = cv::Mat::eye(4,4,CV_32F);
             Rcw.copyTo(Tcw.rowRange(0,3).colRange(0,3));
             tcw.copyTo(Tcw.rowRange(0,3).col(3));
             mCurrentFrame.SetPose(Tcw);
+            lastFrame = Tcw;
 
             CreateInitialMapMonocular();
         }
@@ -665,7 +709,7 @@ void Tracking::CreateInitialMapMonocular()
     mpMap->AddKeyFrame(pKFini);
     mpMap->AddKeyFrame(pKFcur);
 
-    // Create MapPoints and asscoiate to keyframes
+    // Create MapPoints and associate to keyframes
     for(size_t i=0; i<mvIniMatches.size();i++)
     {
         if(mvIniMatches[i]<0)
@@ -707,10 +751,18 @@ void Tracking::CreateInitialMapMonocular()
     if(InitOdom)
     {
         nav_msgs::OdometryPtr CurrOdom = mpSystem->GetOdometry();
+        double vo_dist;
 
         invMedianDepth = sqrt((InitOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)*(InitOdom->pose.pose.position.x - CurrOdom->pose.pose.position.x)
                         +  (InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)*(InitOdom->pose.pose.position.y - CurrOdom->pose.pose.position.y)
                         +  (InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z)*(InitOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z));
+        cv::Mat Tc2w = pKFcur->GetPose();
+        cv::Mat Tc1w = pKFini->GetPose();
+        vo_dist = sqrt(Tc2w.at<float>(0,3)*Tc2w.at<float>(0,3)+Tc2w.at<float>(1,3)*Tc2w.at<float>(1,3)+Tc2w.at<float>(2,3)*Tc2w.at<float>(2,3));
+        cout << " Distance Travelled by ORB_SLAM is " << vo_dist << "actual scaling required " << invMedianDepth/vo_dist << " orig invdepth " << invMedianDepth <<endl;
+        invMedianDepth = invMedianDepth/vo_dist;
+        LastOdom = CurrOdom;
+
     }
     else
     {
@@ -729,7 +781,6 @@ void Tracking::CreateInitialMapMonocular()
     cv::Mat Tc2w = pKFcur->GetPose();
     Tc2w.col(3).rowRange(0,3) = Tc2w.col(3).rowRange(0,3)*invMedianDepth;
     pKFcur->SetPose(Tc2w);
-
     // Scale points
     vector<MapPoint*> vpAllMapPoints = pKFini->GetMapPointMatches();
     for(size_t iMP=0; iMP<vpAllMapPoints.size(); iMP++)
@@ -763,6 +814,9 @@ void Tracking::CreateInitialMapMonocular()
     mpMap->mvpKeyFrameOrigins.push_back(pKFini);
 
     mState=OK;
+
+    vo = cv::Mat::zeros(20,1,CV_32F);
+    wo = cv::Mat::zeros(20,1,CV_32F);
 }
 
 void Tracking::CheckReplacedInLastFrame()

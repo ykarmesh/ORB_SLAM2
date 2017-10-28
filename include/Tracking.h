@@ -225,7 +225,17 @@ protected:
     list<MapPoint*> mlpTemporalPoints;
 
     //First kf Odometry
-    nav_msgs::OdometryPtr InitOdom;
+    nav_msgs::OdometryPtr InitOdom, LastOdom;
+
+    ros::Time lastTime;
+
+    cv::Mat lastFrame;
+
+    cv::Mat vo,wo;
+
+    int i = 0;
+
+    float s = 1;
 };
 
 } //namespace ORB_SLAM

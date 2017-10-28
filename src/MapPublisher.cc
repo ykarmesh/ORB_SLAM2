@@ -250,8 +250,6 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 		RWC.at<float>(1,0),RWC.at<float>(1,1),RWC.at<float>(1,2),
 		RWC.at<float>(2,0),RWC.at<float>(2,1),RWC.at<float>(2,2));
 	tf::Vector3 V(tWC.at<float>(0), tWC.at<float>(1), tWC.at<float>(2));
-	tf::Quaternion q;
-	M.getRotation(q);
 
 	tf::StampedTransform transformco;
 	try
