@@ -446,30 +446,29 @@ void Tracking::Track()
                             +  (LastOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z)*(LastOdom->pose.pose.position.z - CurrOdom->pose.pose.position.z));
               if(wo_dist > 0.1)
               {
-                wo.at<float>(i%20,0) = wo_dist;
+                wo.at<float>(i%15,0) = wo_dist;
                 cv::Mat Twc1 = mCurrentFrame.mTcw.inv();
                 cv::Mat Twc2 = lastFrame.inv();
                 vo_dist = sqrt(pow((Twc1.at<float>(0,3)-Twc2.at<float>(0,3)),2)+pow((Twc1.at<float>(1,3)-Twc2.at<float>(1,3)),2)
                                +pow((Twc1.at<float>(2,3)-Twc2.at<float>(2,3)),2));
-                vo.at<float>(i%20,0) = vo_dist;
+                vo.at<float>(i%15,0) = vo_dist;
                 cv::Mat a = wo.t()*vo;
                 cv::Mat b = vo.t()*vo;
                 s = a.at<float>(0,0)/b.at<float>(0,0);
                 cout << i << " ORB_SLAM: " << vo_dist << " Wheel odom " << wo_dist << " actual scaling required " << s <<endl;
                 i++;
-
               }
               LastOdom = CurrOdom;
               lastTime = ros::Time::now();
               lastFrame = mCurrentFrame.mTcw;
             }
-            if((!mLastFrame.mTcw.empty())&&(i/2 == 1))
+            /*if(!mLastFrame.mTcw.empty())
             {
               mVelocity.rowRange(0,3).col(3) = mVelocity.rowRange(0,3).col(3) * s;
               cv::Mat a = mVelocity*mLastFrame.mTcw;
               mCurrentFrame.mTcw.rowRange(0,3).colRange(0,3).copyTo(a.rowRange(0,3).colRange(0,3));
               mCurrentFrame.SetPose(a);
-            }
+            }*/
             mpMapPublisher->SetCurrentCameraPose(mCurrentFrame.mTcw);
 
             // Clean VO matches
@@ -772,7 +771,7 @@ void Tracking::CreateInitialMapMonocular()
 
     if(invMedianDepth<0 || pKFcur->TrackedMapPoints(1)<100)
     {
-        cout << "Wrong initialization, reseting..." << endl;
+        cout << "Wrong initialization, reseting" << endl;
         mpSystem->Reset();
         return;
     }
@@ -815,8 +814,8 @@ void Tracking::CreateInitialMapMonocular()
 
     mState=OK;
 
-    vo = cv::Mat::zeros(20,1,CV_32F);
-    wo = cv::Mat::zeros(20,1,CV_32F);
+    vo = cv::Mat::ones(15,1,CV_32F);
+    wo = cv::Mat::ones(15,1,CV_32F);
 }
 
 void Tracking::CheckReplacedInLastFrame()
@@ -1149,6 +1148,16 @@ void Tracking::CreateNewKeyFrame()
         return;
 
     KeyFrame* pKF = new KeyFrame(mCurrentFrame,mpMap,mpKeyFrameDB);
+
+    /*vector<MapPoint*> KeyFrameMapPoints = pKF->GetMapPointMatches();
+    for(size_t iMP=0; iMP<KeyFrameMapPoints.size(); iMP++)
+    {
+        if(KeyFrameMapPoints[iMP])
+        {
+            MapPoint* pMP = KeyFrameMapPoints[iMP];
+            pMP->SetWorldPos(pMP->GetWorldPos()*s);
+        }
+    }*/
 
     mpReferenceKF = pKF;
     mCurrentFrame.mpReferenceKF = pKF;
@@ -1685,7 +1694,7 @@ bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB
     const float tyy = ty * q.y;
     const float tyz = tz * q.y;
     const float tzz = tz * q.z;
-    float pose_data[20] = { 1 - (tyy + tzz), txy - twz, txz + twy, req.pose.pose.position.x,
+    float pose_data[16] = { 1 - (tyy + tzz), txy - twz, txz + twy, req.pose.pose.position.x,
                             txy + twz, 1 - (txx + tzz), tyz - twx, req.pose.pose.position.y,
                             txz - twy, tyz + twx, 1 - (txx + tyy), req.pose.pose.position.z,
                             0, 0, 0, 1};

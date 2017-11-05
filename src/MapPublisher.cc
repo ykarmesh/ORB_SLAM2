@@ -56,7 +56,7 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	mMST.ns = GRAPH_NAMESPACE;
 	mMST.id=3;
 	mMST.type = visualization_msgs::Marker::LINE_LIST;
-	mMST.scale.x=0.005;
+	mMST.scale.x=0.03;
 	mMST.pose.orientation.w=1.0;
 	mMST.action=visualization_msgs::Marker::ADD;
 	mMST.color.b=0.0f;
