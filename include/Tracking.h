@@ -115,6 +115,8 @@ public:
     // True if local mapping is deactivated and we are performing only localization
     bool mbOnlyTracking;
 
+    std::vector<MapPoint*> mvpLocalMapPoints;
+
     void Reset();
     bool PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB_SLAM2::PosePointCloudResponse & resp); 
 
@@ -174,7 +176,6 @@ protected:
     //Local Map
     KeyFrame* mpReferenceKF;
     std::vector<KeyFrame*> mvpLocalKeyFrames;
-    std::vector<MapPoint*> mvpLocalMapPoints;
     
     // System
     System* mpSystem;

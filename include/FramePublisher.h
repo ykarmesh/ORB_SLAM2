@@ -52,7 +52,7 @@ public:
 	
 protected:
 	const char* MAP_FRAME_ID = "/world";
-    const char* CAMERA_FRAME_ID = "/camera_rgb_optical_frame";
+        const char* CAMERA_FRAME_ID = "/camera_rgb_optical_frame";
     
 	int mnTracked;
 
@@ -70,6 +70,8 @@ protected:
 	vector<bool> mvbOutliers;
 
 	vector<MapPoint*> mvpMatchedMapPoints;
+
+	vector<MapPoint*> mvpLocalMapPoints;
 	
 	vector<cv::KeyPoint> mvIniKeys;
 	vector<int> mvIniMatches;

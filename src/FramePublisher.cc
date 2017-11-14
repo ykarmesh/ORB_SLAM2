@@ -35,7 +35,7 @@
 
 
 namespace ORB_SLAM2
-{ 
+{
 
 
 
@@ -48,7 +48,7 @@ FramePublisher::FramePublisher(Map *pMap)
 	mImagePub = mNH.advertise<sensor_msgs::Image>("ORB_SLAM2/Frame",10,true);
 	mFramePointsPub = mNH.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/FramePoints",10,true);
 	mSLAMStatusPub = mNH.advertise<std_msgs::Bool>("ORB_SLAM2/Status",10,true);
-	
+
 	mMapPointCloud.header.frame_id=MAP_FRAME_ID;
 	mMapPointCloud.header.seq=0;
 	mMapPointCloud.fields.resize(3);
@@ -66,7 +66,7 @@ FramePublisher::FramePublisher(Map *pMap)
 	mMapPointCloud.fields[2].count = 1;
 	mMapPointCloud.point_step = 3*sizeof(uint32_t);
 	mMapPointCloud.is_dense = false;
-}  
+}
 
 void FramePublisher::SetMap(Map *pMap)
 {
@@ -84,12 +84,13 @@ void FramePublisher::Refresh()
 }
 
 cv::Mat FramePublisher::DrawFrame()
-{   
+{
 	cv::Mat im;
 	vector<cv::KeyPoint> vIniKeys; // Initialization: KeyPoints in reference frame
 	vector<int> vMatches; // Initialization: correspondeces with reference keypoints
 	vector<cv::KeyPoint> vCurrentKeys; // KeyPoints in current frame
 	vector<MapPoint*> vMatchedMapPoints; // Tracked MapPoints in current frame
+	vector<MapPoint*> vLocalMapPoints;
 
 	int state; // Tracking state
 
@@ -107,7 +108,7 @@ cv::Mat FramePublisher::DrawFrame()
 		mIm.copyTo(im);
 
 		if(mState==Tracking::NOT_INITIALIZED)
-		{			
+		{
 			vCurrentKeys = mvCurrentKeys;
 			vIniKeys = mvIniKeys;
 			vMatches = mvIniMatches;
@@ -116,6 +117,7 @@ cv::Mat FramePublisher::DrawFrame()
 		{
 			vCurrentKeys = mvCurrentKeys;
 			vMatchedMapPoints = mvpMatchedMapPoints;
+			vLocalMapPoints = mvpLocalMapPoints;
 		}
 		else if(mState==Tracking::LOST)
 		{
@@ -136,17 +138,17 @@ cv::Mat FramePublisher::DrawFrame()
 				cv::line(im,vIniKeys[i].pt,vCurrentKeys[vMatches[i]].pt,
 						cv::Scalar(0,255,0));
 			}
-		}		
+		}
 	}
 	else if(state==Tracking::OK) //TRACKING
 	{
 		mnTracked=0;
 		const float r = 5;
-		mMapPointCloud.width=vMatchedMapPoints.size();
+		mMapPointCloud.width=vLocalMapPoints.size();
 		mMapPointCloud.row_step = mMapPointCloud.point_step * mMapPointCloud.width;
 		mMapPointCloud.data.resize(mMapPointCloud.row_step * mMapPointCloud.height);
-		unsigned char* dat = &(mMapPointCloud.data[0]);	
-				
+		unsigned char* dat = &(mMapPointCloud.data[0]);
+
 		for(unsigned int i=0;i<vMatchedMapPoints.size();i++)
 		{
 			vMatchedMapPoints[i];
@@ -166,29 +168,28 @@ cv::Mat FramePublisher::DrawFrame()
 					uint8_t b = (colourlvl & 0x00ff0000)>>16;
 					cv::rectangle(im,pt1,pt2,cv::Scalar(r,g,b),CV_FILLED);
 					mnTracked++;
-
-					cv::Mat pos = vMatchedMapPoints[i]->GetWorldPos();
-					/*float x = pos.at<float>(0);
-					float y = pos.at<float>(1);
-					float z = pos.at<float>(2);
-					*/memcpy(dat, &(pos.at<float>(0)),sizeof(float));
-					memcpy(dat+sizeof(float), &(pos.at<float>(1)),sizeof(float));
-					memcpy(dat+2*sizeof(float), &(pos.at<float>(2)),sizeof(float));
-					dat+=mMapPointCloud.point_step;
 				}
 			}
+		}
+		for(unsigned int i=0;i<vLocalMapPoints.size();i++)
+		{
+			cv::Mat pos = vLocalMapPoints[i]->GetWorldPos();
+			memcpy(dat, &(pos.at<float>(0)),sizeof(float));
+			memcpy(dat+sizeof(float), &(pos.at<float>(1)),sizeof(float));
+			memcpy(dat+2*sizeof(float), &(pos.at<float>(2)),sizeof(float));
+			dat+=mMapPointCloud.point_step;
 		}
 		/*mMapPointCloud.width=mnTracked;
 				mMapPointCloud.row_step = mMapPointCloud.point_step * mMapPointCloud.width;
 				mMapPointCloud.data.resize(mMapPointCloud.row_step * mMapPointCloud.height);
-				
+
 */
 		mFramePointsPub.publish(mMapPointCloud);
 	}
 
 	cv::Mat imWithInfo;
 	DrawTextInfo(im,state, imWithInfo);
-	
+
 	return imWithInfo;
 }
 
@@ -201,7 +202,7 @@ void FramePublisher::PublishFrame()
 	rosImage.encoding = "bgr8";
 
 	mImagePub.publish(rosImage.toImageMsg());
-	
+
 
 	ros::spinOnce();
 }
@@ -214,7 +215,7 @@ void FramePublisher::PublishSLAMStatus()
 }
 
 void FramePublisher::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
-{   
+{
 	stringstream s;
 	if(nState==Tracking::NO_IMAGES_YET)
 		s << "WAITING FOR IMAGES. (Topic: /camera/rgb/image_raw)";
@@ -247,6 +248,7 @@ void FramePublisher::Update(Tracking *pTracker)
 	pTracker->mImGray.copyTo(mIm);
 	mvCurrentKeys=pTracker->mCurrentFrame.mvKeys;
 	mvpMatchedMapPoints=pTracker->mCurrentFrame.mvpMapPoints;
+	mvpLocalMapPoints=pTracker->mvpLocalMapPoints;
 	mvbOutliers = pTracker->mCurrentFrame.mvbOutlier;
 
 	if(pTracker->mLastProcessedState==Tracking::NOT_INITIALIZED)
@@ -254,7 +256,7 @@ void FramePublisher::Update(Tracking *pTracker)
 		mvIniKeys=pTracker->mInitialFrame.mvKeys;
 		mvIniMatches=pTracker->mvIniMatches;
 	}
-	
+
 	mState=static_cast<int>(pTracker->mLastProcessedState);
 	mbUpdated=true;
 }

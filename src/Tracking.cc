@@ -758,7 +758,6 @@ void Tracking::CreateInitialMapMonocular()
         cv::Mat Tc2w = pKFcur->GetPose();
         cv::Mat Tc1w = pKFini->GetPose();
         vo_dist = sqrt(Tc2w.at<float>(0,3)*Tc2w.at<float>(0,3)+Tc2w.at<float>(1,3)*Tc2w.at<float>(1,3)+Tc2w.at<float>(2,3)*Tc2w.at<float>(2,3));
-        cout << " Distance Travelled by ORB_SLAM is " << vo_dist << "actual scaling required " << invMedianDepth/vo_dist << " orig invdepth " << invMedianDepth <<endl;
         invMedianDepth = invMedianDepth/vo_dist;
         LastOdom = CurrOdom;
 
@@ -1681,6 +1680,7 @@ void Tracking::InformOnlyTracking(const bool &flag)
 
 bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB_SLAM2::PosePointCloudResponse & resp)
 {
+    ros::Time start = ros::Time::now();
     geometry_msgs::Quaternion q = req.pose.pose.orientation;
     const float tx = 2 * q.x;
     const float ty = 2 * q.y;
@@ -1729,11 +1729,13 @@ bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB
     resp.pointCloud.is_dense = false;
     resp.pointCloud.data.clear();
     resp.pointCloud.height=1;
-    resp.pointCloud.width=mvpLocalMapPoints.size();
+    resp.pointCloud.width=mvpLocalMapPoints.size(); //mCurrentFrame.mvpMapPoints.size();
     resp.pointCloud.row_step = resp.pointCloud.point_step * resp.pointCloud.width;
     resp.pointCloud.data.resize(resp.pointCloud.row_step * resp.pointCloud.height);
     unsigned char* dat = &(resp.pointCloud.data[0]);
     int num_points = 0;
+
+    //for(vector<MapPoint*>::iterator vit=mCurrentFrame.mvpMapPoints.begin(), vend=mCurrentFrame.mvpMapPoints.end(); vit!=vend; vit++)
     for(vector<MapPoint*>::iterator vit=mvpLocalMapPoints.begin(), vend=mvpLocalMapPoints.end(); vit!=vend; vit++)
     {
         MapPoint* pMP = *vit;
@@ -1792,6 +1794,7 @@ bool Tracking::PosePointCloudService(ORB_SLAM2::PosePointCloudRequest & req, ORB
     resp.pointCloud.width=num_points;
     resp.pointCloud.row_step = resp.pointCloud.point_step * resp.pointCloud.width;
     resp.pointCloud.data.resize(resp.pointCloud.row_step * resp.pointCloud.height);
+    std::cout<<"Time required in point cloud"<<ros::Time::now() - start<<std::endl;
     return true;
 }
 
