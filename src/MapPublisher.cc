@@ -114,15 +114,19 @@ void MapPublisher::Refresh(int state)
 		ResetCamFlag();
 	}
 
+	vector<KeyFrame*> vKeyFrames;
+	vector<MapPoint*> vMapPoints;
+	vector<MapPoint*> vRefMapPoints;
+
 	{
 		unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
-		vector<KeyFrame*> vKeyFrames = mpMap->GetAllKeyFrames();
-		vector<MapPoint*> vMapPoints = mpMap->GetAllMapPoints();
-		vector<MapPoint*> vRefMapPoints = mpMap->GetReferenceMapPoints();
-
-		PublishMapPoints(vMapPoints, vRefMapPoints, mCameraPose.clone());
-		PublishKeyFrames(vKeyFrames);
+		vKeyFrames = mpMap->GetAllKeyFrames();
+		vMapPoints = mpMap->GetAllMapPoints();
+		vRefMapPoints = mpMap->GetReferenceMapPoints();
 	}
+
+	PublishMapPoints(vMapPoints, vRefMapPoints, mCameraPose.clone());
+	PublishKeyFrames(vKeyFrames);
 }
 
 void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const std::vector<MapPoint*> &vpRefMPs, const cv::Mat &Tcw)
@@ -254,14 +258,13 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 	tf::StampedTransform transformco;
 	try
 	{
-    listener.lookupTransform("/camera_rgb_optical_frame", "/odom", ros::Time(0), transformco);
+        	listener.lookupTransform("/camera_rgb_optical_frame", "/odom", ros::Time(0), transformco);
 	}
-  catch (tf::TransformException &ex)
+  	catch (tf::TransformException &ex)
 	{
-  	ROS_ERROR("%s",ex.what());
-		ros::Duration(1.0).sleep();
+  		ROS_ERROR("%s",ex.what());
 		return;
-  }
+  	}
 
 	static tf::TransformBroadcaster br;
 	tf::Transform transformwc = tf::Transform(M, V);
