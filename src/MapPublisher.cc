@@ -96,6 +96,19 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	mMapPointCloud.point_step = 6*sizeof(uint32_t);
 	mMapPointCloud.is_dense = false;
 
+	vslam_path.id=0;
+	vslam_path.lifetime=ros::Duration(1);
+	vslam_path.header.frame_id = "world2D";
+	vslam_path.header.stamp = ros::Time::now();
+	vslam_path.ns = "pointcloud_publisher";
+	vslam_path.action = visualization_msgs::Marker::ADD;
+	vslam_path.type = visualization_msgs::Marker::LINE_STRIP;
+	vslam_path.color.r=0.0;
+	vslam_path.color.b=1.0;
+	vslam_path.color.a=1.0;
+	vslam_path.scale.x=0.1;
+	vslam_path.pose.orientation.w=1.0;
+
 	cout<<"Configure Publishers"<<endl;
 	mapPointCloud_pub = nh.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/Pointcloud",1);
 	pose_pub = nh.advertise<geometry_msgs::PoseStamped>("ORB_SLAM2/Pose",1);
@@ -255,10 +268,19 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 		RWC.at<float>(2,0),RWC.at<float>(2,1),RWC.at<float>(2,2));
 	tf::Vector3 V(tWC.at<float>(0), tWC.at<float>(1), tWC.at<float>(2));
 
-	tf::StampedTransform transformco;
+	tf::StampedTransform transformco, transformob;
 	try
 	{
         	listener.lookupTransform("/camera_rgb_optical_frame", "/odom", ros::Time(0), transformco);
+	}
+  	catch (tf::TransformException &ex)
+	{
+  		ROS_ERROR("%s",ex.what());
+		return;
+  	}
+	try
+	{
+        	listener.lookupTransform(ODOM_FRAME_ID, "/base_link", ros::Time(0), transformob);
 	}
   	catch (tf::TransformException &ex)
 	{
@@ -269,7 +291,7 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 	static tf::TransformBroadcaster br;
 	tf::Transform transformwc = tf::Transform(M, V);
 	br.sendTransform(tf::StampedTransform(transformwc * transformco, ros::Time::now(), MAP_FRAME_ID, ODOM_FRAME_ID));
-	geometry_msgs::PoseStamped _pose;
+	geometry_msgs::PoseStamped _pose, temp_pose;
 	_pose.pose.position.x = transformwc.getOrigin().x();
 	_pose.pose.position.y = transformwc.getOrigin().y();
 	_pose.pose.position.z = transformwc.getOrigin().z();
@@ -281,6 +303,20 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 	_pose.header.stamp = ros::Time::now();
 	_pose.header.frame_id = MAP_FRAME_ID;
 	pose_pub.publish(_pose);
+
+	temp_pose.pose.position.x = transformob.getOrigin().x();
+	temp_pose.pose.position.y = transformob.getOrigin().y();
+	temp_pose.pose.position.z = transformob.getOrigin().z();
+	temp_pose.pose.orientation.x = transformob.getRotation().x();
+	temp_pose.pose.orientation.y = transformob.getRotation().y();
+	temp_pose.pose.orientation.z = transformob.getRotation().z();
+	temp_pose.pose.orientation.w = transformob.getRotation().w();
+
+	temp_pose.header.stamp = ros::Time::now();
+	temp_pose.header.frame_id = "world2D";
+	
+	vslam_path.points.push_back(temp_pose.pose.position);
+	path_pub.publish(vslam_path);
 }
 
 void MapPublisher::SetCurrentCameraPose(const cv::Mat &Tcw)
