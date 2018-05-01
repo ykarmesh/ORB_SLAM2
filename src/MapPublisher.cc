@@ -22,10 +22,9 @@
 #include <tf/transform_datatypes.h>
 #include <tf/transform_broadcaster.h>
 #include "Tracking.h"
+
 namespace ORB_SLAM2
 {
-
-
 MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 {
 	cout<<"Configure KeyFrames"<<endl;
@@ -108,7 +107,7 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	vslam_path.color.a=1.0;
 	vslam_path.scale.x=0.1;
 	vslam_path.pose.orientation.w=1.0;
-	
+
 	geometry_msgs::PoseStamped last_pose;
 	last_pose.pose.position.x = last_pose.pose.position.y = last_pose.pose.position.z = 0;
 	last_pose.pose.orientation.x = last_pose.pose.orientation.y = last_pose.pose.orientation.z = 0;
@@ -286,6 +285,7 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
   		ROS_ERROR("%s",ex.what());
 		return;
   	}
+
 	try
 	{
         	listener.lookupTransform(ODOM_FRAME_ID, MAP_FRAME_ID, ros::Time(0), transformow);
@@ -302,6 +302,7 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 	br.sendTransform(tf::StampedTransform(transformob, ros::Time::now(), ODOM_FRAME_ID, "/base_footprint"));
 	geometry_msgs::PoseStamped _pose, last_pose, temp_pose;
 	nav_msgs::Odometry _odom;
+
 	_pose.pose.position.x = transformwc.getOrigin().x();
 	_pose.pose.position.y = transformwc.getOrigin().y();
 	_pose.pose.position.z = transformwc.getOrigin().z();
@@ -327,7 +328,7 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 
 	_odom.pose.pose = temp_pose.pose;
 	last_pose = previous_poses.front();
-	_odom.twist.twist.linear.x = sqrt(pow((temp_pose.pose.position.x - last_pose.pose.position.x),2)+pow((temp_pose.pose.position.y - last_pose.pose.position.y),2))/(temp_pose.header.stamp-last_pose.header.stamp).toSec();
+	_odom.twist.twist.linear.x = sqrt(pow((temp_pose.pose.position.x - last_pose.pose.position.x),2)+pow((temp_pose.pose.position.y - last_pose.pose.position.y),2))/(temp_pose.header.stamp -last_pose.header.stamp).toSec();
 	_odom.twist.twist.linear.y = 0;
 	double roll, pitch, yaw, last_yaw;
 	tf::Quaternion q;
@@ -347,7 +348,6 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 		previous_poses.pop();
 	}
 	odom_pub.publish(_odom);
-
 	
 	vslam_path.points.push_back(temp_pose.pose.position);
 	path_pub.publish(vslam_path);

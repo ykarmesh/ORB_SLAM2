@@ -64,11 +64,15 @@ private:
 
 	ros::NodeHandle nh;
 	ros::Publisher publisher;
+
 	ros::Publisher mapPointCloud_pub, pose_pub, odom_pub, kfPath_pub, kfMST_pub, kfCovisibility_pub, path_pub;
 
 	visualization_msgs::Marker mKeyFrames, mCovisibilityGraph, mMST;
 	sensor_msgs::PointCloud2 mMapPointCloud;
 	visualization_msgs::Marker vslam_path;
+
+	visualization_msgs::Marker vslam_path;
+
 
     	float fCameraSize;
 	float fPointSize;
