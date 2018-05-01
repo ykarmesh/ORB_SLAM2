@@ -18,7 +18,13 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
-find_package(OpenCV REQUIRED)
+find_package(OpenCV 3.3 QUIET)
+if(NOT OpenCV_FOUND)
+   find_package(OpenCV 2.4.3 QUIET)
+   if(NOT OpenCV_FOUND)
+      message(FATAL_ERROR "OpenCV > 2.4.3 not found.")
+   endif()
+endif()
 find_package(Eigen3 3.1.0 REQUIRED)
 find_package(Boost REQUIRED)
 

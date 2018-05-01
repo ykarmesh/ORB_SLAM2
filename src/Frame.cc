@@ -241,7 +241,9 @@ void Frame::AssignFeaturesToGrid()
         int nGridPosX, nGridPosY;
         if(PosInGrid(kp,nGridPosX,nGridPosY))
             mGrid[nGridPosX][nGridPosY].push_back(i);
+	    nGrid[nGridPosX/8][nGridPosY/8].push_back(i);
     }
+     
 }
 
 void Frame::ExtractORB(int flag, const cv::Mat &im)

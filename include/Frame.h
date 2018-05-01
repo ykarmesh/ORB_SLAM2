@@ -159,6 +159,7 @@ public:
     static float mfGridElementWidthInv;
     static float mfGridElementHeightInv;
     std::vector<std::size_t> mGrid[FRAME_GRID_COLS][FRAME_GRID_ROWS];
+    std::vector<std::size_t> nGrid[FRAME_GRID_COLS/8][FRAME_GRID_ROWS/8];
 
     // Camera pose.
     cv::Mat mTcw;

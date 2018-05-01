@@ -96,12 +96,33 @@ MapPublisher::MapPublisher(Map* pMap):mpMap(pMap), mbCameraUpdated(false)
 	mMapPointCloud.point_step = 6*sizeof(uint32_t);
 	mMapPointCloud.is_dense = false;
 
+	vslam_path.id=0;
+	vslam_path.lifetime=ros::Duration(1);
+	vslam_path.header.frame_id = "world2D";
+	vslam_path.header.stamp = ros::Time::now();
+	vslam_path.ns = "pointcloud_publisher";
+	vslam_path.action = visualization_msgs::Marker::ADD;
+	vslam_path.type = visualization_msgs::Marker::LINE_STRIP;
+	vslam_path.color.r=0.0;
+	vslam_path.color.b=1.0;
+	vslam_path.color.a=1.0;
+	vslam_path.scale.x=0.1;
+	vslam_path.pose.orientation.w=1.0;
+	
+	geometry_msgs::PoseStamped last_pose;
+	last_pose.pose.position.x = last_pose.pose.position.y = last_pose.pose.position.z = 0;
+	last_pose.pose.orientation.x = last_pose.pose.orientation.y = last_pose.pose.orientation.z = 0;
+	last_pose.pose.orientation.w = 1;
+	previous_poses.push(last_pose);
+
 	cout<<"Configure Publishers"<<endl;
 	mapPointCloud_pub = nh.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/Pointcloud",1);
 	pose_pub = nh.advertise<geometry_msgs::PoseStamped>("ORB_SLAM2/Pose",1);
+	odom_pub = nh.advertise<nav_msgs::Odometry>("ORB_SLAM2/Odom",1);
 	kfPath_pub = nh.advertise<visualization_msgs::Marker>("ORB_SLAM2/Path",1);
 	kfMST_pub = nh.advertise<visualization_msgs::Marker>("ORB_SLAM2/MST",1);
 	kfCovisibility_pub = nh.advertise<visualization_msgs::Marker>("ORB_SLAM2/Covisibility",1);
+	path_pub = nh.advertise<visualization_msgs::Marker>("/ORB_SLAM2/Blue_Path",1);
 }
 
 void MapPublisher::Refresh(int state)
@@ -114,15 +135,19 @@ void MapPublisher::Refresh(int state)
 		ResetCamFlag();
 	}
 
+	vector<KeyFrame*> vKeyFrames;
+	vector<MapPoint*> vMapPoints;
+	vector<MapPoint*> vRefMapPoints;
+
 	{
 		unique_lock<mutex> lock(mpMap->mMutexMapUpdate);
-		vector<KeyFrame*> vKeyFrames = mpMap->GetAllKeyFrames();
-		vector<MapPoint*> vMapPoints = mpMap->GetAllMapPoints();
-		vector<MapPoint*> vRefMapPoints = mpMap->GetReferenceMapPoints();
-
-		PublishMapPoints(vMapPoints, vRefMapPoints, mCameraPose.clone());
-		PublishKeyFrames(vKeyFrames);
+		vKeyFrames = mpMap->GetAllKeyFrames();
+		vMapPoints = mpMap->GetAllMapPoints();
+		vRefMapPoints = mpMap->GetReferenceMapPoints();
 	}
+
+	PublishMapPoints(vMapPoints, vRefMapPoints, mCameraPose.clone());
+	PublishKeyFrames(vKeyFrames);
 }
 
 void MapPublisher::PublishMapPoints(const std::vector<MapPoint*> &vpMPs, const std::vector<MapPoint*> &vpRefMPs, const cv::Mat &Tcw)
@@ -251,22 +276,32 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 		RWC.at<float>(2,0),RWC.at<float>(2,1),RWC.at<float>(2,2));
 	tf::Vector3 V(tWC.at<float>(0), tWC.at<float>(1), tWC.at<float>(2));
 
-	tf::StampedTransform transformco;
+	tf::StampedTransform transformcb,transformow;
 	try
 	{
-    listener.lookupTransform("/camera_rgb_optical_frame", "/odom", ros::Time(0), transformco);
+        	listener.lookupTransform("/camera_rgb_optical_frame", "/base_footprint", ros::Time(0), transformcb);
 	}
-  catch (tf::TransformException &ex)
+  	catch (tf::TransformException &ex)
 	{
-  	ROS_ERROR("%s",ex.what());
-		ros::Duration(1.0).sleep();
+  		ROS_ERROR("%s",ex.what());
 		return;
-  }
+  	}
+	try
+	{
+        	listener.lookupTransform(ODOM_FRAME_ID, MAP_FRAME_ID, ros::Time(0), transformow);
+	}
+  	catch (tf::TransformException &ex)
+	{
+  		ROS_ERROR("%s",ex.what());
+		return;
+  	}
 
 	static tf::TransformBroadcaster br;
-	tf::Transform transformwc = tf::Transform(M, V);
-	br.sendTransform(tf::StampedTransform(transformwc * transformco, ros::Time::now(), MAP_FRAME_ID, ODOM_FRAME_ID));
-	geometry_msgs::PoseStamped _pose;
+	tf::Transform transformwc = tf::Transform(M, V), transformob;
+	transformob = transformow * transformwc * transformcb;
+	br.sendTransform(tf::StampedTransform(transformob, ros::Time::now(), ODOM_FRAME_ID, "/base_footprint"));
+	geometry_msgs::PoseStamped _pose, last_pose, temp_pose;
+	nav_msgs::Odometry _odom;
 	_pose.pose.position.x = transformwc.getOrigin().x();
 	_pose.pose.position.y = transformwc.getOrigin().y();
 	_pose.pose.position.z = transformwc.getOrigin().z();
@@ -278,6 +313,44 @@ void MapPublisher::PublishCurrentCamera(const cv::Mat &Tcw)
 	_pose.header.stamp = ros::Time::now();
 	_pose.header.frame_id = MAP_FRAME_ID;
 	pose_pub.publish(_pose);
+
+	temp_pose.pose.position.x = transformob.getOrigin().x();
+	temp_pose.pose.position.y = transformob.getOrigin().y();
+	temp_pose.pose.position.z = transformob.getOrigin().z();
+	temp_pose.pose.orientation.x = transformob.getRotation().x();
+	temp_pose.pose.orientation.y = transformob.getRotation().y();
+	temp_pose.pose.orientation.z = transformob.getRotation().z();
+	temp_pose.pose.orientation.w = transformob.getRotation().w();
+
+	temp_pose.header.stamp = ros::Time::now();
+	temp_pose.header.frame_id = "world2D";
+
+	_odom.pose.pose = temp_pose.pose;
+	last_pose = previous_poses.front();
+	_odom.twist.twist.linear.x = sqrt(pow((temp_pose.pose.position.x - last_pose.pose.position.x),2)+pow((temp_pose.pose.position.y - last_pose.pose.position.y),2))/(temp_pose.header.stamp-last_pose.header.stamp).toSec();
+	_odom.twist.twist.linear.y = 0;
+	double roll, pitch, yaw, last_yaw;
+	tf::Quaternion q;
+	tf::quaternionMsgToTF(temp_pose.pose.orientation, q);
+	tf::Matrix3x3(q).getRPY(roll, pitch, yaw);
+	tf::quaternionMsgToTF(last_pose.pose.orientation, q);
+	tf::Matrix3x3(q).getRPY(roll, pitch, last_yaw);
+	_odom.twist.twist.angular.z = (yaw - last_yaw)/(temp_pose.header.stamp-last_pose.header.stamp).toSec();
+	//cout<<" Velx "<< _odom.twist.twist.linear.x <<" Vely "<<_odom.twist.twist.linear.y <<" Velth "<<_odom.twist.twist.angular.z<<endl;
+	if(previous_poses.size()<=10)
+	{
+		previous_poses.push(temp_pose);
+	}
+	else
+	{
+		previous_poses.push(temp_pose);
+		previous_poses.pop();
+	}
+	odom_pub.publish(_odom);
+
+	
+	vslam_path.points.push_back(temp_pose.pose.position);
+	path_pub.publish(vslam_path);
 }
 
 void MapPublisher::SetCurrentCameraPose(const cv::Mat &Tcw)

@@ -64,10 +64,11 @@ private:
 
 	ros::NodeHandle nh;
 	ros::Publisher publisher;
-	ros::Publisher mapPointCloud_pub, pose_pub, kfPath_pub, kfMST_pub, kfCovisibility_pub;
+	ros::Publisher mapPointCloud_pub, pose_pub, odom_pub, kfPath_pub, kfMST_pub, kfCovisibility_pub, path_pub;
 
 	visualization_msgs::Marker mKeyFrames, mCovisibilityGraph, mMST;
 	sensor_msgs::PointCloud2 mMapPointCloud;
+	visualization_msgs::Marker vslam_path;
 
     	float fCameraSize;
 	float fPointSize;
@@ -78,6 +79,9 @@ private:
 	boost::mutex mMutexCamera;
 
 	tf::TransformListener listener;
+
+	queue<geometry_msgs::PoseStamped> previous_poses;
+	int counter;
 };
 
 } //namespace ORB_SLAM2

@@ -23,21 +23,17 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
-
-#include<boost/thread.hpp>
+#include <boost/thread.hpp>
 #include <ros/ros.h>
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/Image.h>
+#include <std_msgs/Float32MultiArray.h>
 #include <std_msgs/Bool.h>
 #include <MapPoint.h>
 #include <iostream>
 
-
-
 namespace ORB_SLAM2
 {
-
-
 
 FramePublisher::FramePublisher(Map *pMap)
 {
@@ -48,6 +44,7 @@ FramePublisher::FramePublisher(Map *pMap)
 	mImagePub = mNH.advertise<sensor_msgs::Image>("ORB_SLAM2/Frame",10,true);
 	mFramePointsPub = mNH.advertise<sensor_msgs::PointCloud2>("ORB_SLAM2/FramePoints",10,true);
 	mSLAMStatusPub = mNH.advertise<std_msgs::Bool>("ORB_SLAM2/Status",10,true);
+	mFeatureInfoPub = mNH.advertise<std_msgs::Float32MultiArray>("ORB_SLAM2/FeatureInfo",10,true);
 
 	mMapPointCloud.header.frame_id=MAP_FRAME_ID;
 	mMapPointCloud.header.seq=0;
@@ -79,6 +76,7 @@ void FramePublisher::Refresh()
 	{
 		PublishFrame();
 		PublishSLAMStatus();
+		PublishFeatureInfo();
 		mbUpdated = false;
 	}
 }
@@ -214,6 +212,38 @@ void FramePublisher::PublishSLAMStatus()
 	mSLAMStatusPub.publish(status);
 }
 
+void FramePublisher::PublishFeatureInfo()
+{
+	std_msgs::Float32MultiArray feature;
+	feature.layout.dim.push_back(std_msgs::MultiArrayDimension()); 
+	feature.layout.dim[0].label = "height";
+	feature.layout.dim[0].size = 8;
+	feature.layout.dim[0].stride = 2*8*6;
+	feature.layout.dim.push_back(std_msgs::MultiArrayDimension());
+	feature.layout.dim[1].label = "width";
+	feature.layout.dim[1].size = 6;
+	feature.layout.dim[1].stride = 2*6;
+	feature.layout.dim.push_back(std_msgs::MultiArrayDimension());
+	feature.layout.dim[2].label = "channel";
+	feature.layout.dim[2].size = 2;
+	feature.layout.dim[2].stride = 2;
+	feature.layout.data_offset = 0;
+	// ngrid row = 8 , ngrid col = 6
+	//feature.data[96] = {0};
+	for(int i=0;i<FRAME_GRID_COLS_;i++)
+	{
+	        for(int j=0;j<FRAME_GRID_ROWS_;j++)
+		{
+			//feature.data[i*12 + j*2] = nGrid[i][j].size();
+			// constant value of depth as of now , to be changed later 
+			//feature.data[i*12 + j*2 + 1] = 1; 
+			feature.data.push_back(nGrid[i][j].size());
+			feature.data.push_back(1);
+		}
+	}
+	mFeatureInfoPub.publish(feature);
+}
+
 void FramePublisher::DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText)
 {
 	stringstream s;
@@ -250,6 +280,12 @@ void FramePublisher::Update(Tracking *pTracker)
 	mvpMatchedMapPoints=pTracker->mCurrentFrame.mvpMapPoints;
 	mvpLocalMapPoints=pTracker->mvpLocalMapPoints;
 	mvbOutliers = pTracker->mCurrentFrame.mvbOutlier;
+	for(int i=0;i<FRAME_GRID_COLS_;i++)
+	{	for(int j=0;j<FRAME_GRID_ROWS_;j++)
+		{
+        		nGrid[i][j] = pTracker->mCurrentFrame.nGrid[i][j];
+		}
+	}
 
 	if(pTracker->mLastProcessedState==Tracking::NOT_INITIALIZED)
 	{

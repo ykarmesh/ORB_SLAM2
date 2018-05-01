@@ -31,6 +31,8 @@
 #include <opencv2/features2d/features2d.hpp>
 #include <sensor_msgs/PointCloud2.h>
 #include <boost/thread.hpp>
+#define FRAME_GRID_ROWS_ 6
+#define FRAME_GRID_COLS_ 8
 
 
 namespace ORB_SLAM2
@@ -60,6 +62,7 @@ protected:
 
 	void PublishFrame();
 	void PublishSLAMStatus();
+	void PublishFeatureInfo();	
 
 	void DrawTextInfo(cv::Mat &im, int nState, cv::Mat &imText);
 
@@ -77,12 +80,14 @@ protected:
 	vector<int> mvIniMatches;
 
 	ros::NodeHandle mNH;
-	ros::Publisher mImagePub, mFramePointsPub, mSLAMStatusPub;
+	ros::Publisher mImagePub, mFramePointsPub, mSLAMStatusPub, mFeatureInfoPub;
 	sensor_msgs::PointCloud2 mMapPointCloud;
 	
 	int mState;
 
 	bool mbUpdated;
+	std::vector<std::size_t> nGrid[FRAME_GRID_COLS_][FRAME_GRID_ROWS_];
+        //std::vector<std::size_t> *nGrid;
 
 	Map* mpMap;
 
